@@ -1002,6 +1002,24 @@ void control_config_use_preset(CC_preset &preset)
 	}
 }
 
+CC_preset& control_config_preset_for_device(CC_preset &saved)
+{
+	if (Control_config_presets.empty() || &saved != &Control_config_presets.front())
+		return saved;
+
+	auto joy = io::joystick::getPlayerJoystick(CID_JOY0);
+	if (joy == nullptr || !joy->isGamepad())
+		return saved;
+
+	auto it = std::find_if(Control_config_presets.begin(), Control_config_presets.end(),
+		[](const CC_preset &preset) { return preset.name == "Gamepad"; });
+	if (it == Control_config_presets.end())
+		return saved;
+
+	mprintf(("CCFG => Joy-0 is a gamepad, using the 'Gamepad' preset\n"));
+	return *it;
+}
+
 bool control_config_use_preset_by_name(const SCP_string &name) {
 	auto it = std::find_if(Control_config_presets.begin(), Control_config_presets.end(),
 		[name](CC_preset &preset) {return preset.name == name;});

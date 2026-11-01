@@ -826,6 +826,13 @@ void control_config_cancel_exit(bool API_Access = false);
  */
 void control_config_use_preset(CC_preset &preset);
 
+/**
+ * @brief Picks the preset to apply for a pilot's saved preset, taking the connected joystick into account
+ * @details Pilots that still use the default preset get the preset named "Gamepad" when Joy-0 is a gamepad (the
+ * default bindings are laid out for flight sticks). Customised pilots are left alone.
+ */
+CC_preset& control_config_preset_for_device(CC_preset &saved);
+
 /*!
  * @brief Search for a given preset by name and use it, if it exists.
  *

@@ -803,7 +803,7 @@ void pilotfile::plr_read_controls()
 			it = Control_config_presets.begin();
 		}
 
-		control_config_use_preset(*it);
+		control_config_use_preset(control_config_preset_for_device(*it));
 		return;
 	}
 }
