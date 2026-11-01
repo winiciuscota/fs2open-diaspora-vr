@@ -7102,6 +7102,7 @@ bool post_process_mission(mission *pm)
 					// QtFRED surfaces SEXP errors through ErrorChecker's fred_check_sexp; skip the popup there.
 					if (!Qtfred_running)
 						Warning(LOCATION, "%s", error_msg.c_str());
+					mprintf(("SEXP syntax error: %s\n", error_msg.c_str()));
 
 					// syntax errors are recoverable in Fred but not FS
 					if (!Fred_running && !sexp_recoverable_error(result)) {
