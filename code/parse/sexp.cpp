@@ -35420,6 +35420,10 @@ bool sexp_recoverable_error(int num)
 		case SEXP_CHECK_AMBIGUOUS_GOAL_NAME:
 			return true;
 
+		// Legacy missions (e.g. Diaspora) use <argument> outside an argument handler; the runtime tolerates it.
+		case SEXP_CHECK_MISPLACED_SPECIAL_ARGUMENT:
+			return true;
+
 		// Having an invalid gauge in FSO won't hurt,
 		// as all places which call hud_get_gauge() or hud_get_custom_gauge() check its return value for NULL.
 		case SEXP_CHECK_INVALID_CUSTOM_HUD_GAUGE:
