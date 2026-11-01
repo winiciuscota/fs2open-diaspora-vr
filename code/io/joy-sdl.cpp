@@ -1264,6 +1264,46 @@ namespace joystick
 			}
 		}
 		if (!used) {
+			// Nothing configured (or the configured device is absent): pick the best connected device so that any
+			// stick, HOTAS or gamepad works out of the box. Flight sticks first, then gamepads, then anything with axes.
+			auto score = [](Joystick* stick) {
+				if (stick == nullptr || stick->getName() == "OpenXR Controllers" || stick->numAxes() < 2)
+					return 0;
+				switch (SDL_GetJoystickType(stick->getJoystick())) {
+					case SDL_JOYSTICK_TYPE_FLIGHT_STICK: return 100;
+					case SDL_JOYSTICK_TYPE_GAMEPAD: return 60;
+					case SDL_JOYSTICK_TYPE_WHEEL:
+					case SDL_JOYSTICK_TYPE_THROTTLE: return 5;
+					default: return stick->numAxes() >= 3 ? 30 : 10;
+				}
+			};
+
+			Joystick* best = nullptr;
+			int best_score = 0;
+			for (auto& stick : joysticks) {
+				int sc = score(stick.get());
+				if (sc > best_score) {
+					best = stick.get();
+					best_score = sc;
+				}
+			}
+
+			if (best != nullptr) {
+				mprintf(("  Auto-selecting '%s'\n", best->getName().c_str()));
+				setPlayerJoystick(best, CID_JOY0);
+				used = true;
+
+				// a separate throttle unit (HOTAS) becomes Joy-1
+				for (auto& stick : joysticks) {
+					if (stick.get() != best && stick->getName() != "OpenXR Controllers" &&
+						SDL_GetJoystickType(stick->getJoystick()) == SDL_JOYSTICK_TYPE_THROTTLE) {
+						setPlayerJoystick(stick.get(), CID_JOY1);
+						break;
+					}
+				}
+			}
+		}
+		if (!used) {
 			mprintf(("  No joystick is being used.\n"));
 		}
 

@@ -11,6 +11,10 @@
 #include <cmath>
 #include <cstring>
 #include <SDL3/SDL_joystick.h>
+#include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_video.h>
+#include "osapi/osapi.h"
 #include <SDL3/SDL_timer.h>
 
 std::unique_ptr<star[]> Stars_XRBuffer;
@@ -274,6 +278,10 @@ static XrAction xr_act_stick = XR_NULL_HANDLE, xr_act_trigger = XR_NULL_HANDLE, 
 static XrAction xr_act_primary = XR_NULL_HANDLE, xr_act_secondary = XR_NULL_HANDLE, xr_act_stickclick = XR_NULL_HANDLE, xr_act_menu = XR_NULL_HANDLE;
 static std::array<XrPath, 2> xr_hand_paths{ XR_NULL_PATH, XR_NULL_PATH };
 static bool xr_input_ready = false;
+static XrAction xr_act_aim = XR_NULL_HANDLE;
+static std::array<XrSpace, 2> xr_aim_spaces{ XR_NULL_HANDLE, XR_NULL_HANDLE };
+static float xr_pointer_u = -1.0f, xr_pointer_v = -1.0f;
+static bool xr_pointer_down = false;
 static SDL_Joystick* xr_pad = nullptr;
 static bool xr_pad_attach_failed = false;
 static float xr_throttle = 0.5f;
@@ -329,6 +337,7 @@ static void openxr_init_input() {
 	xr_act_secondary = openxr_make_action("secondary", XR_ACTION_TYPE_BOOLEAN_INPUT);  // B / Y
 	xr_act_stickclick = openxr_make_action("stick_click", XR_ACTION_TYPE_BOOLEAN_INPUT);
 	xr_act_menu = openxr_make_action("menu", XR_ACTION_TYPE_BOOLEAN_INPUT);
+	xr_act_aim = openxr_make_action("aim", XR_ACTION_TYPE_POSE_INPUT);
 
 	const SCP_vector<std::pair<XrAction, const char*>> touch = {
 		{ xr_act_stick, "/user/hand/left/input/thumbstick" }, { xr_act_stick, "/user/hand/right/input/thumbstick" },
@@ -338,6 +347,7 @@ static void openxr_init_input() {
 		{ xr_act_secondary, "/user/hand/left/input/y/click" }, { xr_act_secondary, "/user/hand/right/input/b/click" },
 		{ xr_act_stickclick, "/user/hand/left/input/thumbstick/click" }, { xr_act_stickclick, "/user/hand/right/input/thumbstick/click" },
 		{ xr_act_menu, "/user/hand/left/input/menu/click" },
+		{ xr_act_aim, "/user/hand/left/input/aim/pose" }, { xr_act_aim, "/user/hand/right/input/aim/pose" },
 	};
 	openxr_suggest("/interaction_profiles/oculus/touch_controller", touch);
 	openxr_suggest("/interaction_profiles/meta/touch_controller_plus", touch);
@@ -345,7 +355,15 @@ static void openxr_init_input() {
 	openxr_suggest("/interaction_profiles/khr/simple_controller", {
 		{ xr_act_trigger, "/user/hand/left/input/select/click" }, { xr_act_trigger, "/user/hand/right/input/select/click" },
 		{ xr_act_menu, "/user/hand/left/input/menu/click" }, { xr_act_menu, "/user/hand/right/input/menu/click" },
+		{ xr_act_aim, "/user/hand/left/input/aim/pose" }, { xr_act_aim, "/user/hand/right/input/aim/pose" },
 	});
+
+	for (int hand = 0; hand < 2 && xr_act_aim != XR_NULL_HANDLE; hand++) {
+		XrActionSpaceCreateInfo spaceInfo{ XR_TYPE_ACTION_SPACE_CREATE_INFO, nullptr, xr_act_aim, xr_hand_paths[hand],
+			XrPosef{ XrQuaternionf{ 0, 0, 0, 1 }, XrVector3f{ 0, 0, 0 } } };
+		if (xrCreateActionSpace(xr_session, &spaceInfo, &xr_aim_spaces[hand]) != XR_SUCCESS)
+			xr_aim_spaces[hand] = XR_NULL_HANDLE;
+	}
 
 	XrSessionActionSetsAttachInfo attach{ XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO, nullptr, 1, &xr_actionset };
 	if (xrAttachSessionActionSets(xr_session, &attach) != XR_SUCCESS) {
@@ -360,6 +378,80 @@ static void openxr_init_input() {
 static Sint16 openxr_axis16(float v) {
 	v = std::max(-1.0f, std::min(1.0f, v));
 	return static_cast<Sint16>(v * 32767.0f);
+}
+
+// Menus are drawn as a flat plane (x in +-2*clip_aspect, y in +-2, z = 4 in FSO space, see gr_opengl_openxr_flip) and the
+// engine paints its own cursor at the mouse position, so the right controller's aim ray is turned into mouse input.
+static void openxr_update_pointer(bool trigger, bool squeeze) {
+	SDL_Window* window = os::getSDLMainWindow();
+	if (window == nullptr || xr_aim_spaces[1] == XR_NULL_HANDLE || xr_stage != OpenXRFBStage::NONE)
+		return;
+
+	XrSpaceLocation loc{ XR_TYPE_SPACE_LOCATION };
+	if (xrLocateSpace(xr_aim_spaces[1], xr_space, xr_state.predictedDisplayTime, &loc) != XR_SUCCESS)
+		return;
+	const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+	if ((loc.locationFlags & need) != need)
+		return;
+
+	// controller forward (-Z) rotated by the pose orientation: v' = v + 2w(q x v) + 2 q x (q x v)
+	const XrQuaternionf& q = loc.pose.orientation;
+	const float vx = 0.0f, vy = 0.0f, vz = -1.0f;
+	const float c1x = q.y * vz - q.z * vy, c1y = q.z * vx - q.x * vz, c1z = q.x * vy - q.y * vx;
+	const float c2x = q.y * c1z - q.z * c1y, c2y = q.z * c1x - q.x * c1z, c2z = q.x * c1y - q.y * c1x;
+	const float dx = vx + 2.0f * (q.w * c1x + c2x);
+	const float dy = vy + 2.0f * (q.w * c1y + c2y);
+	const float dz = -(vz + 2.0f * (q.w * c1z + c2z));	// to FSO space (z flipped)
+
+	const float ox = loc.pose.position.x - xr_offset.xyz.x;
+	const float oy = loc.pose.position.y - xr_offset.xyz.y;
+	const float oz = -loc.pose.position.z - xr_offset.xyz.z;
+
+	if (dz < 0.05f)
+		return;
+	const float t = (4.0f - oz) / dz;
+	const float hx = ox + t * dx, hy = oy + t * dy;
+
+	const float halfw = 2.0f * gr_screen.clip_aspect;
+	const float u = (hx / halfw + 1.0f) * 0.5f;
+	const float v = (1.0f - hy / 2.0f) * 0.5f;	// 0 = top of the screen
+	if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f)
+		return;
+
+	int ww = 0, wh = 0;
+	SDL_GetWindowSize(window, &ww, &wh);
+
+	SDL_Event ev;
+	SDL_zero(ev);
+	ev.type = SDL_EVENT_MOUSE_MOTION;
+	ev.motion.windowID = SDL_GetWindowID(window);
+	ev.motion.x = u * static_cast<float>(ww);
+	ev.motion.y = v * static_cast<float>(wh);
+	ev.motion.xrel = (xr_pointer_u < 0.0f) ? 0.0f : (u - xr_pointer_u) * static_cast<float>(ww);
+	ev.motion.yrel = (xr_pointer_v < 0.0f) ? 0.0f : (v - xr_pointer_v) * static_cast<float>(wh);
+	SDL_PushEvent(&ev);
+	xr_pointer_u = u;
+	xr_pointer_v = v;
+
+	// right trigger = left click, right squeeze = right click
+	static bool right_down = false;
+	auto click = [&](int button, bool& state, bool now) {
+		if (now == state)
+			return;
+		state = now;
+		SDL_Event b;
+		SDL_zero(b);
+		b.type = now ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+		b.button.windowID = SDL_GetWindowID(window);
+		b.button.button = static_cast<Uint8>(button);
+		b.button.down = now;
+		b.button.clicks = 1;
+		b.button.x = ev.motion.x;
+		b.button.y = ev.motion.y;
+		SDL_PushEvent(&b);
+	};
+	click(SDL_BUTTON_LEFT, xr_pointer_down, trigger);
+	click(SDL_BUTTON_RIGHT, right_down, squeeze);
 }
 
 static void openxr_update_input() {
@@ -448,6 +540,8 @@ static void openxr_update_input() {
 	SDL_SetJoystickVirtualButton(xr_pad, 8, getBool(xr_act_stickclick, 0));
 	SDL_SetJoystickVirtualButton(xr_pad, 9, getBool(xr_act_stickclick, 1));
 	SDL_SetJoystickVirtualButton(xr_pad, 10, getBool(xr_act_menu, 0));
+
+	openxr_update_pointer(getFloat(xr_act_trigger, 1) > 0.5f, getFloat(xr_act_squeeze, 1) > 0.5f);
 }
 
 static void openxr_init_post() {
