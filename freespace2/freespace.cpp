@@ -4753,6 +4753,10 @@ int game_check_key()
 
 bool pause_if_unfocused()
 {
+	// a VR session has no focused desktop window to keep the game running
+	if (openxr_requested())
+		return false;
+
 	if (Using_in_game_options) {
 		return UnfocusedPauseOption->getValue();
 	} else {
