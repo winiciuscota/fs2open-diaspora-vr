@@ -277,15 +277,18 @@ bool gr_opengl_openxr_flip() {
 			XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO,
 			nullptr
 		};
-		uint32_t activeIndex;
-		xrAcquireSwapchainImage(swapchain, &acquireImageInfo, &activeIndex);
+		uint32_t activeIndex = 0;
+		// e.g. XR_ERROR_SESSION_LOST when the headset goes away: skip the frame instead of indexing with garbage
+		if (xrAcquireSwapchainImage(swapchain, &acquireImageInfo, &activeIndex) != XR_SUCCESS || activeIndex >= swapchainImages[i].size())
+			continue;
 
 		XrSwapchainImageWaitInfo waitImageInfo{
 			XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
 			nullptr,
 			std::numeric_limits<int64_t>::max()
 		};
-		xrWaitSwapchainImage(swapchain, &waitImageInfo);
+		if (xrWaitSwapchainImage(swapchain, &waitImageInfo) != XR_SUCCESS)
+			continue;
 
 		const XrSwapchainImageOpenGLKHR& image = swapchainImages[i][activeIndex];
 
