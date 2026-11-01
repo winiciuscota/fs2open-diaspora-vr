@@ -443,7 +443,6 @@ namespace os
 		{
 			Global_warning_count++;
 
-#ifndef NDEBUG
 			SCP_string msg;
 			va_list args;
 
@@ -451,7 +450,11 @@ namespace os
 			vsprintf(msg, format, args);
 			va_end(args);
 
+#ifndef NDEBUG
 			WarningImpl(filename, line, msg);
+#else
+			// Release builds count these warnings (and show the startup popup for them) but used to drop the text: log it
+			mprintf(("Warning (debug-only): %s:%d: %s\n", filename, line, msg.c_str()));
 #endif
 		}
 
