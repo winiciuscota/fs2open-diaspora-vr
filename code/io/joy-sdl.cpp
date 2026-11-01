@@ -505,6 +505,20 @@ bool device_event_handler(const SDL_Event &evt)
 			joysticks.push_back(std::move(added));
 		}
 
+		// The OpenXR controllers (virtual joystick created by openxr.cpp) take the first free slot
+		if (addedStick->getName() == "OpenXR Controllers")
+		{
+			for (short i = CID_JOY0; i < CID_JOY_MAX; ++i)
+			{
+				if (pJoystick[i] == nullptr)
+				{
+					mprintf(("OpenXR controllers connected as Joy-%i\n", i));
+					setPlayerJoystick(addedStick, i);
+					return true;
+				}
+			}
+		}
+
 		// Is true if all of the pJoysticks are bound
 		bool all_bound = std::all_of(pJoystick.begin(), pJoystick.end(), [](Joystick* pJoy){ return pJoy != nullptr; });
 

@@ -7,6 +7,11 @@
 #include "render/3d.h"
 #include "starfield/starfield.h"
 #include "hud/hudparse.h"
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <SDL3/SDL_joystick.h>
+#include <SDL3/SDL_timer.h>
 
 std::unique_ptr<star[]> Stars_XRBuffer;
 
@@ -254,6 +259,197 @@ static bool openxr_init_space() {
 	return true;
 }
 
+// ---- Controller input -------------------------------------------------------------------------------------------
+// The engine has no native OpenXR input, so the controllers are exposed to the game as an SDL virtual joystick
+// ("OpenXR Controllers") which the regular joystick code binds to Joy-0 (or the first free slot).
+//   axis 0 (X)  = right stick X (bank)        axis 1 (Y)  = right stick Y (pitch, forward = negative)
+//   axis 5 (RZ) = left stick X (yaw)          axis 2 (Z)  = absolute throttle, integrated from left stick Y
+//   axis 3 (RX) = left trigger                axis 4 (RY) = right trigger
+//   buttons: 0 R trigger, 1 A, 2 B, 3 X, 4 Y, 5 L trigger, 6 L squeeze, 7 R squeeze, 8 L stick, 9 R stick, 10 menu
+static constexpr int XR_PAD_AXES = 6;
+static constexpr int XR_PAD_BUTTONS = 11;
+
+static XrActionSet xr_actionset = XR_NULL_HANDLE;
+static XrAction xr_act_stick = XR_NULL_HANDLE, xr_act_trigger = XR_NULL_HANDLE, xr_act_squeeze = XR_NULL_HANDLE;
+static XrAction xr_act_primary = XR_NULL_HANDLE, xr_act_secondary = XR_NULL_HANDLE, xr_act_stickclick = XR_NULL_HANDLE, xr_act_menu = XR_NULL_HANDLE;
+static std::array<XrPath, 2> xr_hand_paths{ XR_NULL_PATH, XR_NULL_PATH };
+static bool xr_input_ready = false;
+static SDL_Joystick* xr_pad = nullptr;
+static bool xr_pad_attach_failed = false;
+static float xr_throttle = 0.5f;
+static Uint64 xr_input_last_ns = 0;
+
+static XrAction openxr_make_action(const char* name, XrActionType type) {
+	XrActionCreateInfo info{ XR_TYPE_ACTION_CREATE_INFO, nullptr };
+	strncpy(info.actionName, name, XR_MAX_ACTION_NAME_SIZE - 1);
+	strncpy(info.localizedActionName, name, XR_MAX_LOCALIZED_ACTION_NAME_SIZE - 1);
+	info.actionType = type;
+	info.countSubactionPaths = 2;
+	info.subactionPaths = xr_hand_paths.data();
+	XrAction action = XR_NULL_HANDLE;
+	if (xrCreateAction(xr_actionset, &info, &action) != XR_SUCCESS)
+		return XR_NULL_HANDLE;
+	return action;
+}
+
+static void openxr_suggest(const char* profile, const SCP_vector<std::pair<XrAction, const char*>>& binds) {
+	XrPath profilePath;
+	if (xrStringToPath(xr_instance, profile, &profilePath) != XR_SUCCESS)
+		return;
+
+	SCP_vector<XrActionSuggestedBinding> suggested;
+	for (const auto& b : binds) {
+		XrPath path;
+		if (b.first != XR_NULL_HANDLE && xrStringToPath(xr_instance, b.second, &path) == XR_SUCCESS)
+			suggested.push_back({ b.first, path });
+	}
+
+	XrInteractionProfileSuggestedBinding info{ XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING, nullptr, profilePath,
+		static_cast<uint32_t>(suggested.size()), suggested.data() };
+	if (xrSuggestInteractionProfileBindings(xr_instance, &info) != XR_SUCCESS)
+		mprintf(("OpenXR: runtime rejected controller bindings for %s\n", profile));
+}
+
+static void openxr_init_input() {
+	XrActionSetCreateInfo setInfo{ XR_TYPE_ACTION_SET_CREATE_INFO, nullptr };
+	strcpy(setInfo.actionSetName, "flight");
+	strcpy(setInfo.localizedActionSetName, "Flight");
+	if (xrCreateActionSet(xr_instance, &setInfo, &xr_actionset) != XR_SUCCESS) {
+		mprintf(("OpenXR: could not create the input action set, controllers disabled\n"));
+		return;
+	}
+
+	xrStringToPath(xr_instance, "/user/hand/left", &xr_hand_paths[0]);
+	xrStringToPath(xr_instance, "/user/hand/right", &xr_hand_paths[1]);
+
+	xr_act_stick = openxr_make_action("stick", XR_ACTION_TYPE_VECTOR2F_INPUT);
+	xr_act_trigger = openxr_make_action("trigger", XR_ACTION_TYPE_FLOAT_INPUT);
+	xr_act_squeeze = openxr_make_action("squeeze", XR_ACTION_TYPE_FLOAT_INPUT);
+	xr_act_primary = openxr_make_action("primary", XR_ACTION_TYPE_BOOLEAN_INPUT);      // A / X
+	xr_act_secondary = openxr_make_action("secondary", XR_ACTION_TYPE_BOOLEAN_INPUT);  // B / Y
+	xr_act_stickclick = openxr_make_action("stick_click", XR_ACTION_TYPE_BOOLEAN_INPUT);
+	xr_act_menu = openxr_make_action("menu", XR_ACTION_TYPE_BOOLEAN_INPUT);
+
+	const SCP_vector<std::pair<XrAction, const char*>> touch = {
+		{ xr_act_stick, "/user/hand/left/input/thumbstick" }, { xr_act_stick, "/user/hand/right/input/thumbstick" },
+		{ xr_act_trigger, "/user/hand/left/input/trigger/value" }, { xr_act_trigger, "/user/hand/right/input/trigger/value" },
+		{ xr_act_squeeze, "/user/hand/left/input/squeeze/value" }, { xr_act_squeeze, "/user/hand/right/input/squeeze/value" },
+		{ xr_act_primary, "/user/hand/left/input/x/click" }, { xr_act_primary, "/user/hand/right/input/a/click" },
+		{ xr_act_secondary, "/user/hand/left/input/y/click" }, { xr_act_secondary, "/user/hand/right/input/b/click" },
+		{ xr_act_stickclick, "/user/hand/left/input/thumbstick/click" }, { xr_act_stickclick, "/user/hand/right/input/thumbstick/click" },
+		{ xr_act_menu, "/user/hand/left/input/menu/click" },
+	};
+	openxr_suggest("/interaction_profiles/oculus/touch_controller", touch);
+	openxr_suggest("/interaction_profiles/meta/touch_controller_plus", touch);
+	openxr_suggest("/interaction_profiles/meta/touch_pro_controller", touch);
+	openxr_suggest("/interaction_profiles/khr/simple_controller", {
+		{ xr_act_trigger, "/user/hand/left/input/select/click" }, { xr_act_trigger, "/user/hand/right/input/select/click" },
+		{ xr_act_menu, "/user/hand/left/input/menu/click" }, { xr_act_menu, "/user/hand/right/input/menu/click" },
+	});
+
+	XrSessionActionSetsAttachInfo attach{ XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO, nullptr, 1, &xr_actionset };
+	if (xrAttachSessionActionSets(xr_session, &attach) != XR_SUCCESS) {
+		mprintf(("OpenXR: could not attach the input action set, controllers disabled\n"));
+		return;
+	}
+
+	xr_input_ready = true;
+	mprintf(("OpenXR: controller input enabled (virtual joystick 'OpenXR Controllers')\n"));
+}
+
+static Sint16 openxr_axis16(float v) {
+	v = std::max(-1.0f, std::min(1.0f, v));
+	return static_cast<Sint16>(v * 32767.0f);
+}
+
+static void openxr_update_input() {
+	if (!xr_input_ready)
+		return;
+
+	if (xr_pad == nullptr) {
+		if (xr_pad_attach_failed)
+			return;
+
+		SDL_VirtualJoystickDesc desc;
+		SDL_INIT_INTERFACE(&desc);
+		desc.type = SDL_JOYSTICK_TYPE_FLIGHT_STICK;
+		desc.naxes = XR_PAD_AXES;
+		desc.nbuttons = XR_PAD_BUTTONS;
+		desc.vendor_id = 0x2833;	// Meta
+		desc.product_id = 0x0186;
+		desc.name = "OpenXR Controllers";
+		SDL_JoystickID id = SDL_AttachVirtualJoystick(&desc);
+		if (id == 0) {
+			// the joystick subsystem may not be up yet, try again on a later frame a few times
+			static int tries = 0;
+			if (++tries > 600)
+				xr_pad_attach_failed = true;
+			return;
+		}
+		xr_pad = SDL_OpenJoystick(id);
+		if (xr_pad == nullptr) {
+			xr_pad_attach_failed = true;
+			return;
+		}
+	}
+
+	XrActiveActionSet active{ xr_actionset, XR_NULL_PATH };
+	XrActionsSyncInfo sync{ XR_TYPE_ACTIONS_SYNC_INFO, nullptr, 1, &active };
+	if (xrSyncActions(xr_session, &sync) != XR_SUCCESS)
+		return;
+
+	auto getFloat = [](XrAction action, int hand) {
+		XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO, nullptr, action, xr_hand_paths[hand] };
+		XrActionStateFloat st{ XR_TYPE_ACTION_STATE_FLOAT };
+		if (xrGetActionStateFloat(xr_session, &gi, &st) == XR_SUCCESS && st.isActive)
+			return st.currentState;
+		return 0.0f;
+	};
+	auto getBool = [](XrAction action, int hand) {
+		XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO, nullptr, action, xr_hand_paths[hand] };
+		XrActionStateBoolean st{ XR_TYPE_ACTION_STATE_BOOLEAN };
+		return xrGetActionStateBoolean(xr_session, &gi, &st) == XR_SUCCESS && st.isActive && st.currentState;
+	};
+	auto getStick = [](int hand) {
+		XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO, nullptr, xr_act_stick, xr_hand_paths[hand] };
+		XrActionStateVector2f st{ XR_TYPE_ACTION_STATE_VECTOR2F };
+		if (xrGetActionStateVector2f(xr_session, &gi, &st) == XR_SUCCESS && st.isActive)
+			return st.currentState;
+		return XrVector2f{ 0.0f, 0.0f };
+	};
+
+	const XrVector2f left = getStick(0), right = getStick(1);
+
+	const Uint64 now = SDL_GetTicksNS();
+	float dt = xr_input_last_ns ? static_cast<float>(now - xr_input_last_ns) * 1e-9f : 0.0f;
+	xr_input_last_ns = now;
+	dt = std::min(dt, 0.1f);
+
+	// the throttle lever holds its position: pushing the left stick forward raises it, back lowers it
+	if (std::fabs(left.y) > 0.15f)
+		xr_throttle = std::max(0.0f, std::min(1.0f, xr_throttle + left.y * dt * 0.6f));
+
+	SDL_SetJoystickVirtualAxis(xr_pad, 0, openxr_axis16(right.x));
+	SDL_SetJoystickVirtualAxis(xr_pad, 1, openxr_axis16(-right.y));
+	// FSO's absolute throttle axis: minimum = full throttle
+	SDL_SetJoystickVirtualAxis(xr_pad, 2, openxr_axis16(1.0f - 2.0f * xr_throttle));
+	SDL_SetJoystickVirtualAxis(xr_pad, 3, openxr_axis16(getFloat(xr_act_trigger, 0) * 2.0f - 1.0f));
+	SDL_SetJoystickVirtualAxis(xr_pad, 4, openxr_axis16(getFloat(xr_act_trigger, 1) * 2.0f - 1.0f));
+	SDL_SetJoystickVirtualAxis(xr_pad, 5, openxr_axis16(left.x));
+
+	SDL_SetJoystickVirtualButton(xr_pad, 0, getFloat(xr_act_trigger, 1) > 0.5f);
+	SDL_SetJoystickVirtualButton(xr_pad, 1, getBool(xr_act_primary, 1));
+	SDL_SetJoystickVirtualButton(xr_pad, 2, getBool(xr_act_secondary, 1));
+	SDL_SetJoystickVirtualButton(xr_pad, 3, getBool(xr_act_primary, 0));
+	SDL_SetJoystickVirtualButton(xr_pad, 4, getBool(xr_act_secondary, 0));
+	SDL_SetJoystickVirtualButton(xr_pad, 5, getFloat(xr_act_trigger, 0) > 0.5f);
+	SDL_SetJoystickVirtualButton(xr_pad, 6, getFloat(xr_act_squeeze, 0) > 0.5f);
+	SDL_SetJoystickVirtualButton(xr_pad, 7, getFloat(xr_act_squeeze, 1) > 0.5f);
+	SDL_SetJoystickVirtualButton(xr_pad, 8, getBool(xr_act_stickclick, 0));
+	SDL_SetJoystickVirtualButton(xr_pad, 9, getBool(xr_act_stickclick, 1));
+	SDL_SetJoystickVirtualButton(xr_pad, 10, getBool(xr_act_menu, 0));
+}
+
 static void openxr_init_post() {
 	// Some runtimes (e.g. Monado) reject xrLocateViews with a zero time, so submit one empty frame to obtain a valid predicted time first.
 	if (xr_time == 0) {
@@ -356,6 +552,8 @@ void openxr_init() {
 
 	if (!openxr_init_space())
 		return;
+
+	openxr_init_input();
 
 	openxr_initialized = true;
 
@@ -524,6 +722,8 @@ void openxr_start_frame() {
 	};
 
 	xrWaitFrame(xr_session, &frameWaitInfo, &xr_state);
+
+	openxr_update_input();
 
 	XrViewLocateInfo viewLocateInfo {
 		XR_TYPE_VIEW_LOCATE_INFO,
