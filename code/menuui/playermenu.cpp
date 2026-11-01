@@ -394,7 +394,9 @@ static bool Save_file_warning_displayed = false;
 void player_select_show_startup_warnings()
 {
 	// Goober5000 - display a popup warning about problems in the mod
-	if ((Global_warning_count > 10 || Global_error_count > 0) && !Startup_warning_dialog_displayed) {
+	// Diaspora port: legacy mods trigger a handful of harmless startup warnings; only nag when something is badly broken
+	mprintf(("Startup issues: %d warnings, %d errors\n", Global_warning_count, Global_error_count));
+	if ((Global_warning_count + Global_error_count > 40) && !Startup_warning_dialog_displayed) {
 		char text[512];
 		sprintf(text, XSTR ("Warning!\n\nThe currently active mod has generated %d warnings and/or errors during program startup.  These could have been caused by anything from incorrectly formatted table files to corrupt models.\n\nWhile FreeSpace Open will attempt to compensate for these issues, it cannot guarantee a trouble-free gameplay experience.\n\nPlease contact the authors of the mod for assistance.", 1640), Global_warning_count + Global_error_count);
 		popup(PF_TITLE_BIG | PF_TITLE_RED | PF_USE_AFFIRMATIVE_ICON, 1, POPUP_OK, text);
