@@ -1267,8 +1267,11 @@ namespace joystick
 			// Nothing configured (or the configured device is absent): pick the best connected device so that any
 			// stick, HOTAS or gamepad works out of the box. Flight sticks first, then gamepads, then anything with axes.
 			auto score = [](Joystick* stick) {
-				if (stick == nullptr || stick->getName() == "OpenXR Controllers" || stick->numAxes() < 2)
+				if (stick == nullptr || stick->numAxes() < 2)
 					return 0;
+				// the VR controllers are the last resort, any real device wins
+				if (stick->getName() == "OpenXR Controllers")
+					return 1;
 				switch (SDL_GetJoystickType(stick->getJoystick())) {
 					case SDL_JOYSTICK_TYPE_FLIGHT_STICK: return 100;
 					case SDL_JOYSTICK_TYPE_GAMEPAD: return 60;

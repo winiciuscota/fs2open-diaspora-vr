@@ -9,6 +9,7 @@
 #include "hud/hudparse.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <SDL3/SDL_joystick.h>
 #include <SDL3/SDL_mouse.h>
@@ -27,6 +28,7 @@ std::unique_ptr<star[]> Stars_XRBuffer;
 bool openxr_req = false;
 bool openxr_initialized = false;
 bool openxr_recieve = false;
+static bool xr_has_touch_plus = false;
 
 XrInstance xr_instance;
 XrSystemId xr_system;
@@ -113,6 +115,22 @@ static bool openxr_init_instance() {
 #if !defined(NDEBUG) && defined(FS_OPENXR_DEBUG)
 	extensions.emplace_back("XR_EXT_debug_utils");
 #endif
+
+	// Quest 3 controllers use the touch_controller_plus profile, which needs its extension enabled before bindings can be suggested
+	{
+		uint32_t extCount = 0;
+		if (xrEnumerateInstanceExtensionProperties(nullptr, 0, &extCount, nullptr) == XR_SUCCESS) {
+			SCP_vector<XrExtensionProperties> props(extCount, XrExtensionProperties{ XR_TYPE_EXTENSION_PROPERTIES, nullptr });
+			if (xrEnumerateInstanceExtensionProperties(nullptr, extCount, &extCount, props.data()) == XR_SUCCESS) {
+				for (const auto& prop : props) {
+					if (strcmp(prop.extensionName, "XR_META_touch_controller_plus") == 0) {
+						extensions.emplace_back("XR_META_touch_controller_plus");
+						xr_has_touch_plus = true;
+					}
+				}
+			}
+		}
+	}
 
 	XrInstanceCreateInfo instanceCreateInfo {
 		XR_TYPE_INSTANCE_CREATE_INFO,
@@ -350,8 +368,8 @@ static void openxr_init_input() {
 		{ xr_act_aim, "/user/hand/left/input/aim/pose" }, { xr_act_aim, "/user/hand/right/input/aim/pose" },
 	};
 	openxr_suggest("/interaction_profiles/oculus/touch_controller", touch);
-	openxr_suggest("/interaction_profiles/meta/touch_controller_plus", touch);
-	openxr_suggest("/interaction_profiles/meta/touch_pro_controller", touch);
+	if (xr_has_touch_plus)
+		openxr_suggest("/interaction_profiles/meta/touch_controller_plus", touch);
 	openxr_suggest("/interaction_profiles/khr/simple_controller", {
 		{ xr_act_trigger, "/user/hand/left/input/select/click" }, { xr_act_trigger, "/user/hand/right/input/select/click" },
 		{ xr_act_menu, "/user/hand/left/input/menu/click" }, { xr_act_menu, "/user/hand/right/input/menu/click" },
@@ -542,6 +560,23 @@ static void openxr_update_input() {
 	SDL_SetJoystickVirtualButton(xr_pad, 10, getBool(xr_act_menu, 0));
 
 	openxr_update_pointer(getFloat(xr_act_trigger, 1) > 0.5f, getFloat(xr_act_squeeze, 1) > 0.5f);
+
+	// FSO_XR_INPUT_DEBUG=1 logs the pad state a few times per second while it changes
+	static const bool debug_input = getenv("FSO_XR_INPUT_DEBUG") != nullptr;
+	if (debug_input) {
+		static Uint64 last_log = 0;
+		static SCP_string last_state;
+		SCP_string state;
+		for (int i = 0; i < XR_PAD_AXES; i++)
+			state += std::to_string(SDL_GetJoystickAxis(xr_pad, i)) + " ";
+		for (int i = 0; i < XR_PAD_BUTTONS; i++)
+			state += SDL_GetJoystickButton(xr_pad, i) ? "1" : "0";
+		if (state != last_state && now - last_log > 250000000ULL) {
+			mprintf(("OpenXR pad: %s\n", state.c_str()));
+			last_state = state;
+			last_log = now;
+		}
+	}
 }
 
 static void openxr_init_post() {
