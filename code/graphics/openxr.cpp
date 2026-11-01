@@ -872,7 +872,14 @@ void openxr_start_frame() {
 		0
 	};
 
-	xrWaitFrame(xr_session, &frameWaitInfo, &xr_state);
+	const XrResult wait_result = xrWaitFrame(xr_session, &frameWaitInfo, &xr_state);
+	if (XR_FAILED(wait_result)) {
+		// the runtime went away (headset removed, WiVRn/Monado stopped): carry on as a flat game instead of spinning on dead frames
+		mprintf(("OpenXR: xrWaitFrame failed with %d, the runtime connection was lost. Continuing without VR.\n", static_cast<int>(wait_result)));
+		openxr_initialized = false;
+		xr_stage = OpenXRFBStage::NONE;
+		return;
+	}
 
 	openxr_update_input();
 
