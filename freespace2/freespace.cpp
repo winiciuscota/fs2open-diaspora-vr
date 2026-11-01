@@ -6618,6 +6618,17 @@ void game_do_state(int state)
 		case GS_STATE_BRIEFING:
 			game_set_frametime(GS_STATE_BRIEFING);
 			brief_do_frame(flFrametime);
+
+			// Test aid: FSO_AUTOCOMMIT=1 presses Commit a few seconds after the briefing opens, so missions can be
+			// started by scripts without driving the window with synthetic input.
+			{
+				static const bool autocommit = getenv("FSO_AUTOCOMMIT") != nullptr;
+				static int briefing_frames = 0;
+				if (autocommit && ++briefing_frames == 180) {
+					commit_pressed();
+					briefing_frames = 0;
+				}
+			}
 			break;
 
 		case GS_STATE_DEBRIEF:
