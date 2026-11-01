@@ -505,7 +505,29 @@ static void openxr_update_input() {
 
 	XrActiveActionSet active{ xr_actionset, XR_NULL_PATH };
 	XrActionsSyncInfo sync{ XR_TYPE_ACTIONS_SYNC_INFO, nullptr, 1, &active };
-	if (xrSyncActions(xr_session, &sync) != XR_SUCCESS)
+	const XrResult sync_result = xrSyncActions(xr_session, &sync);
+
+	static const bool debug_diag = getenv("FSO_XR_INPUT_DEBUG") != nullptr;
+	if (debug_diag) {
+		static Uint64 last_diag = 0;
+		const Uint64 t = SDL_GetTicksNS();
+		if (t - last_diag > 2000000000ULL) {
+			last_diag = t;
+			XrInteractionProfileState prof{ XR_TYPE_INTERACTION_PROFILE_STATE };
+			char path[XR_MAX_PATH_LENGTH] = "";
+			uint32_t len = 0;
+			XrPath rpath = XR_NULL_PATH;
+			xrStringToPath(xr_instance, "/user/hand/right", &rpath);
+			if (xrGetCurrentInteractionProfile(xr_session, rpath, &prof) == XR_SUCCESS && prof.interactionProfile != XR_NULL_PATH)
+				xrPathToString(xr_instance, prof.interactionProfile, sizeof(path), &len, path);
+			XrActionStateGetInfo gi{ XR_TYPE_ACTION_STATE_GET_INFO, nullptr, xr_act_trigger, xr_hand_paths[1] };
+			XrActionStateFloat st{ XR_TYPE_ACTION_STATE_FLOAT };
+			xrGetActionStateFloat(xr_session, &gi, &st);
+			mprintf(("OpenXR input diag: sync=%d right profile='%s' trigger active=%d value=%.2f\n", static_cast<int>(sync_result), path, static_cast<int>(st.isActive), st.currentState));
+		}
+	}
+
+	if (sync_result != XR_SUCCESS)
 		return;
 
 	auto getFloat = [](XrAction action, int hand) {
