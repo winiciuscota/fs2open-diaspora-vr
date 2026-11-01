@@ -255,6 +255,18 @@ static bool openxr_init_space() {
 }
 
 static void openxr_init_post() {
+	// Some runtimes (e.g. Monado) reject xrLocateViews with a zero time, so submit one empty frame to obtain a valid predicted time first.
+	if (xr_time == 0) {
+		XrFrameState frameState { XR_TYPE_FRAME_STATE, nullptr, 0, 0, 0 };
+		XrFrameWaitInfo waitInfo { XR_TYPE_FRAME_WAIT_INFO, nullptr };
+		XrFrameBeginInfo beginInfo { XR_TYPE_FRAME_BEGIN_INFO, nullptr };
+		if (xrWaitFrame(xr_session, &waitInfo, &frameState) == XR_SUCCESS && xrBeginFrame(xr_session, &beginInfo) == XR_SUCCESS) {
+			XrFrameEndInfo endInfo { XR_TYPE_FRAME_END_INFO, nullptr, frameState.predictedDisplayTime, XR_ENVIRONMENT_BLEND_MODE_OPAQUE, 0, nullptr };
+			xrEndFrame(xr_session, &endInfo);
+			xr_time = frameState.predictedDisplayTime;
+		}
+	}
+
 	XrViewLocateInfo viewLocateInfo {
 		XR_TYPE_VIEW_LOCATE_INFO,
 		nullptr,
