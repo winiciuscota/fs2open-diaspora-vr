@@ -15,6 +15,7 @@
 
 #include "io/cursor.h"
 #include "io/mouse.h"
+#include "io/timer.h"
 
 #include <SDL3/SDL_vulkan.h>
 
@@ -218,7 +219,8 @@ void draw_cursor()
 	int mouseX, mouseY;
 	mouse_get_pos(&mouseX, &mouseY);
 
-	// laser: a line from the cursor towards the controller (cut where it leaves the screen)
+	// laser: a glowing beam from the controller to the cursor (cut where it leaves the screen), brighter and thicker
+	// towards the cursor, with a pulsing target ring around the cursor
 	float hand_u, hand_v;
 	if (openxr_get_pointer_hand(&hand_u, &hand_v)) {
 		const float w = i2fl(gr_screen.max_w), h = i2fl(gr_screen.max_h);
@@ -234,13 +236,55 @@ void draw_cursor()
 		else if (dy < 0.0f)
 			t = std::min(t, (0.0f - cy) / dy);
 
-		if (t > 0.0f) {
-			const int ex = fl2i(cx + dx * t), ey = fl2i(cy + dy * t);
-			const int thick = std::max(1, gr_screen.max_h / 540);
-			gr_set_color(110, 200, 255);
-			for (int o = -thick; o <= thick; o++) {
-				gr_line(mouseX + o, mouseY, ex + o, ey, GR_RESIZE_NONE);
-				gr_line(mouseX, mouseY + o, ex, ey + o, GR_RESIZE_NONE);
+		const float scale = h / 1080.0f;
+		const float pulse = 0.5f + 0.5f * sinf(i2fl(timer_get_milliseconds() % 1400) / 1400.0f * PI2);
+		const float len = sqrtf(dx * dx + dy * dy) * t;
+
+		if (t > 0.0f && len > 1.0f) {
+			const float ex = cx + dx * t, ey = cy + dy * t;
+			const float px = -dy / (len / t), py = dx / (len / t);	// unit vector across the beam
+
+			struct Layer { float half_width; int r, g, b; float alpha; };
+			const Layer layers[] = {
+				{ 7.0f, 40, 120, 255, 0.16f },	// wide glow
+				{ 4.0f, 70, 170, 255, 0.30f },	// halo
+				{ 1.5f, 200, 235, 255, 0.95f },	// core
+			};
+			const int steps = 28;
+			for (const auto& layer : layers) {
+				const float hw = layer.half_width * scale;
+				for (int i = 0; i < steps; i++) {
+					const float f0 = i2fl(i) / steps, f1 = i2fl(i + 1) / steps;
+					const float fade = 0.15f + 0.85f * f1 * f1;	// dim at the hand, bright at the cursor
+					const float thick = hw * (0.35f + 0.65f * f1);
+					color c;
+					gr_init_alphacolor(&c, layer.r, layer.g, layer.b, fl2i(255.0f * layer.alpha * fade * (0.85f + 0.15f * pulse)));
+					gr_set_color_fast(&c);
+					// segment i runs from the screen edge (f = 0) to the cursor (f = 1)
+					const float x0 = ex + (cx - ex) * f0, y0 = ey + (cy - ey) * f0;
+					const float x1 = ex + (cx - ex) * f1, y1 = ey + (cy - ey) * f1;
+					const int lines = std::max(1, fl2i(thick * 2.0f));
+					for (int k = 0; k < lines; k++) {
+						const float o = (lines == 1) ? 0.0f : (i2fl(k) / (lines - 1) - 0.5f) * 2.0f * thick;
+						gr_line(fl2i(x0 + px * o), fl2i(y0 + py * o), fl2i(x1 + px * o), fl2i(y1 + py * o), GR_RESIZE_NONE);
+					}
+				}
+			}
+		}
+
+		// target ring around the cursor
+		{
+			const float radius = (16.0f + 4.0f * pulse) * scale;
+			const int seg = 32;
+			color c;
+			gr_init_alphacolor(&c, 150, 215, 255, fl2i(150.0f + 80.0f * pulse));
+			gr_set_color_fast(&c);
+			for (int i = 0; i < seg; i++) {
+				if ((i % 8) >= 6)
+					continue;	// gaps, so it reads as a reticle
+				const float a0 = i2fl(i) / seg * PI2, a1 = i2fl(i + 1) / seg * PI2;
+				gr_line(fl2i(i2fl(mouseX) + cosf(a0) * radius), fl2i(i2fl(mouseY) + sinf(a0) * radius),
+				        fl2i(i2fl(mouseX) + cosf(a1) * radius), fl2i(i2fl(mouseY) + sinf(a1) * radius), GR_RESIZE_NONE);
 			}
 		}
 	}
