@@ -19,6 +19,7 @@
 // This code was adapted from the original NanoVG OpenGL renderer to work with the FreeSpace Open graphics API
 
 #include "NanoVGRenderer.h"
+#include "graphics/matrix.h"
 #include "tracing/tracing.h"
 
 
@@ -548,6 +549,10 @@ size_t NanoVGRenderer::addUniformData(size_t num) {
 	memset(&data, 0, sizeof(data));
 	// Push an unitialized struct into the vector but set the viewport here since that is the same for all elements
 	data.viewSize = { i2fl(_viewport.x), i2fl(_viewport.y) };
+	if (Gr_world_hud_active) {
+		data.useWorld = 1;
+		gr_get_world_hud_matrix(&data.worldMatrix);
+	}
 
 	auto current = _uniformData.size();
 	_uniformData.resize(current + num, data);

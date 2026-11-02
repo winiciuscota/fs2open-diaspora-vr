@@ -209,6 +209,11 @@ struct nanovg_draw_data {
 	int texArrayIndex;
 
 	float pad3;
+
+	// world-fixed VR HUD: when useWorld != 0 the vertex shader projects the 2D canvas vertices with this matrix
+	matrix4 worldMatrix;
+	int useWorld;
+	float pad4[3];
 };
 
 struct decal_globals {

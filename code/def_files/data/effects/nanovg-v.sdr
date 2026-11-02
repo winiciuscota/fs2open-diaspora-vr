@@ -41,18 +41,28 @@ uniform NanoVGUniformData {
 
     vec2 viewSize;
     int texArrayIndex;
+    mat4 worldMatrix;
+    int useWorld;
 };
 
 void main(void) {
 #ifdef VULKAN
 	ftcoord = vertTexCoord.xy;
 	fpos = vertPosition.xy;
-	gl_Position = vec4(2.0 * vertPosition.x / viewSize.x - 1.0,
-	                   1.0 - 2.0 * vertPosition.y / viewSize.y,
-	                   0.0, 1.0);
+	if (useWorld != 0) {
+		gl_Position = worldMatrix * vec4(vertPosition.xy, 0.0, 1.0);
+	} else {
+		gl_Position = vec4(2.0 * vertPosition.x / viewSize.x - 1.0,
+		                   1.0 - 2.0 * vertPosition.y / viewSize.y,
+		                   0.0, 1.0);
+	}
 #else
 	ftcoord = vertTexCoord;
 	fpos = vertPosition;
-	gl_Position = vec4(2.0*vertPosition.x/viewSize.x - 1.0, 1.0 - 2.0*vertPosition.y/viewSize.y, 0, 1);
+	if (useWorld != 0) {
+		gl_Position = worldMatrix * vec4(vertPosition, 0.0, 1.0);
+	} else {
+		gl_Position = vec4(2.0*vertPosition.x/viewSize.x - 1.0, 1.0 - 2.0*vertPosition.y/viewSize.y, 0, 1);
+	}
 #endif
 }

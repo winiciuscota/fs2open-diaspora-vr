@@ -38,6 +38,8 @@ uniform NanoVGUniformData {
 	int type;
 	vec2 viewSize;
 	int texArrayIndex;
+	mat4 worldMatrix;
+	int useWorld;
 };
 
 float sdroundrect(vec2 pt, vec2 ext, float rad) {

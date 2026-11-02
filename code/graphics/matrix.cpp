@@ -273,6 +273,13 @@ void gr_clear_world_hud()
 	Gr_world_hud_active = false;
 }
 
+void gr_get_world_hud_matrix(matrix4* out)
+{
+	matrix4 view_model;
+	vm_matrix4_x_matrix4(&view_model, &Gr_world_hud_view, &Gr_world_hud_model);
+	vm_matrix4_x_matrix4(out, &Gr_world_hud_proj, &view_model);
+}
+
 // set a view and projection matrix for a 2D element
 // TODO: this probably needs to accept values
 void gr_set_2d_matrix(/*int x, int y, int w, int h*/)

@@ -4228,7 +4228,7 @@ static float vr_hud_env(const char* name, float fallback)
 }
 static float vr_hud_zoom() { static const float z = vr_hud_env("FSO_VR_HUD_ZOOM", 0.9f); return z; }
 static float vr_hud_lines() { static const float l = vr_hud_env("FSO_VR_HUD_LINES", 3.0f); return l; }	// stroke width multiplier
-static float vr_hud_distance() { static const float d = vr_hud_env("FSO_VR_HUD_DISTANCE", 14.0f); return d; }	// metres ahead of the cockpit eye point
+static float vr_hud_distance() { static const float d = vr_hud_env("FSO_VR_HUD_DISTANCE", 10.0f); return d; }	// metres ahead of the cockpit eye point
 
 static bool vr_world_hud_active()
 {
