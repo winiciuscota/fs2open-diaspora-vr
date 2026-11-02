@@ -126,7 +126,8 @@ bool vulkan_is_capable(gr_capability capability)
 		return getRendererInstance()->supportsShaderViewportLayerOutput() &&
 		       getRendererInstance()->isDepthClampSupported();
 	case gr_capability::CAPABILITY_THICK_OUTLINE:
-		return false;
+		// main-g.sdr expands every model edge into a screen-space quad (HUD hardpoints / target outlines)
+		return Vk_geometry_shader_enabled;
 	case gr_capability::CAPABILITY_BATCHED_SUBMODELS:
 		return true;
 	case gr_capability::CAPABILITY_TIMESTAMP_QUERY:

@@ -1,4 +1,6 @@
+#ifndef VULKAN
 #extension GL_ARB_gpu_shader5: enable
+#endif
 
 #conditional_include +"LARGE_SHADER" "main_large.sdr"
 #conditional_include -"LARGE_SHADER" "main_small.sdr"
@@ -22,7 +24,12 @@ struct model_light {
 	float ml_sourceRadius;
 };
 
-layout (std140) uniform modelData {
+#ifdef VULKAN
+layout(set = 1, binding = 0, std140)
+#else
+layout (std140)
+#endif
+uniform modelData {
 	mat4 modelViewMatrix;
 	mat4 modelMatrix;
 	mat4 viewMatrix;
@@ -85,6 +92,44 @@ layout (std140) uniform modelData {
 	int flags;
 };
 
+#ifdef VULKAN
+// Same member order as the Vulkan VertexOutput blocks in main-v.sdr / main-f.sdr
+layout(location = 0) in VertexOutput {
+	vec4 position;
+	vec3 normal;
+	vec4 texCoord;
+	mat3 tangentMatrix;
+	float fogDist;
+
+#prereplace IF_FLAG_COMPILED MODEL_SDR_FLAG_SHADOWS
+	vec4 shadowUV[NUM_SHADOW_CASCADES];
+	vec4 shadowPos;
+#prereplace ENDIF_FLAG_COMPILED MODEL_SDR_FLAG_SHADOWS
+} vertIn[];
+
+layout(location = 0) out VertexOutput {
+	vec4 position;
+	vec3 normal;
+	vec4 texCoord;
+	mat3 tangentMatrix;
+	float fogDist;
+
+#prereplace IF_FLAG_COMPILED MODEL_SDR_FLAG_SHADOWS
+	vec4 shadowUV[NUM_SHADOW_CASCADES];
+	vec4 shadowPos;
+#prereplace ENDIF_FLAG_COMPILED MODEL_SDR_FLAG_SHADOWS
+} vertOut;
+
+in gl_PerVertex {
+	vec4 gl_Position;
+	float gl_ClipDistance[1];
+} gl_in[];
+
+out gl_PerVertex {
+	vec4 gl_Position;
+	float gl_ClipDistance[1];
+};
+#else
 in VertexOutput {
 	mat3 tangentMatrix;
 
@@ -118,6 +163,7 @@ out VertexOutput {
 	vec4 shadowPos;
 #prereplace ENDIF_FLAG_COMPILED MODEL_SDR_FLAG_SHADOWS
 } vertOut;
+#endif
 
 #ifdef MODEL_SDR_FLAG_THICK_OUTLINES
 	const vec2 pixelOffsetDir[4] = vec2[](
@@ -165,9 +211,14 @@ out VertexOutput {
                 	vertOut.shadowPos = vertIn[vert].shadowPos;
                 #prereplace ENDIF_FLAG //MODEL_SDR_FLAG_SHADOWS
 
+#ifdef VULKAN
+				// the clip distance is declared, so it always has to be written (the vertex shader writes 1.0 when unused)
+				gl_ClipDistance[0] = gl_in[vert].gl_ClipDistance[0];
+#else
 				if (use_clip_plane != 0) {
 					gl_ClipDistance[0] = gl_in[vert].gl_ClipDistance[0];
 				}
+#endif
 				EmitVertex();
 			}
 

@@ -23,6 +23,7 @@ class VulkanShaderCompiler;
 struct VulkanShaderModule {
 	vk::UniqueShaderModule vertexModule;
 	vk::UniqueShaderModule fragmentModule;
+	vk::UniqueShaderModule geometryModule;	// only for variants that use a geometry shader (thick outlines)
 
 	shader_type type = SDR_TYPE_NONE;
 	unsigned int flags = 0;  // SDR_FLAG_* bitmask for this variant

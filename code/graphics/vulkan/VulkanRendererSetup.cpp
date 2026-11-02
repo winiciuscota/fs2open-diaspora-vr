@@ -24,7 +24,11 @@
 
 extern float flFrametime;
 
+#include "gr_vulkan.h"
+
 namespace graphics::vulkan {
+
+bool Vk_geometry_shader_enabled = false;
 
 namespace {
 
@@ -1012,6 +1016,8 @@ bool VulkanRenderer::createLogicalDevice(const PhysicalDeviceValues& deviceValue
 	enabledFeatures.fillModeNonSolid     = supportedFeatures.fillModeNonSolid;     // wireframe (GR_FILL_MODE_WIRE -> vk::PolygonMode::eLine)
 	enabledFeatures.shaderClipDistance   = supportedFeatures.shaderClipDistance;   // gl_ClipDistance[] in main / shadow-map / default-material vertex shaders
 	enabledFeatures.textureCompressionBC = supportedFeatures.textureCompressionBC; // BC/DXT texture formats (optional; usage gated by isTextureCompressionBCSupported)
+	enabledFeatures.geometryShader       = supportedFeatures.geometryShader;       // thick model outlines (main-g.sdr, MODEL_SDR_FLAG_THICK_OUTLINES)
+	Vk_geometry_shader_enabled = supportedFeatures.geometryShader == VK_TRUE;
 	enabledFeatures.depthClamp           = supportedFeatures.depthClamp;           // clamp depth in the shadow pass (optional; when absent, CAPABILITY_SHADOWS reports false and shadows are disabled)
 
 	vk::PhysicalDeviceAccelerationStructureFeaturesKHR accelStructFeatures;

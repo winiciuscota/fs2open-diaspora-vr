@@ -1,7 +1,27 @@
 #include "VulkanShader.h"
 #include "VulkanShaderCompiler.h"
 
+#include "gr_vulkan.h"
+
 namespace graphics::vulkan {
+
+namespace {
+// whether this variant needs the type's geometry shader (same rule as the OpenGL backend)
+bool shader_variant_uses_geometry(const ShaderTypeInfo* typeInfo, shader_type type, unsigned int flags)
+{
+	if (!Vk_geometry_shader_enabled || typeInfo == nullptr || typeInfo->geo == nullptr) {
+		return false;
+	}
+	bool use_geo = false;
+	shader_for_each_active_variant(type, flags, [&](const ShaderVariantInfo& variant) {
+		if (variant.use_geometry_sdr) {
+			use_geo = true;
+		}
+	});
+	return use_geo;
+}
+} // namespace
+
 
 // Global shader manager pointer
 static VulkanShaderManager* g_shaderManager = nullptr;
@@ -109,6 +129,7 @@ void VulkanShaderManager::recompileAllShaders(const std::function<void(size_t, s
 			// Release old modules
 			shader.vertexModule.reset();
 			shader.fragmentModule.reset();
+			shader.geometryModule.reset();
 			shader.valid = false;
 
 			const ShaderTypeInfo* typeInfo = shader_get_type_info(type);
@@ -145,7 +166,24 @@ void VulkanShaderManager::recompileAllShaders(const std::function<void(size_t, s
 					}
 				}
 
-				shader.valid = shader.vertexModule && shader.fragmentModule;
+				bool geoOk = true;
+				if (shader_variant_uses_geometry(typeInfo, type, flags)) {
+					auto geoSpirv = m_compiler->compile(typeInfo->geo, vk::ShaderStageFlagBits::eGeometry, type, flags, requiresRaytracing);
+					geoOk = false;
+					if (!geoSpirv.empty()) {
+						vk::ShaderModuleCreateInfo createInfo;
+						createInfo.codeSize = geoSpirv.size() * sizeof(uint32_t);
+						createInfo.pCode = geoSpirv.data();
+						try {
+							shader.geometryModule = m_device.createShaderModuleUnique(createInfo);
+							geoOk = true;
+						} catch (const vk::SystemError& e) {
+							nprintf(("vulkan", "VulkanShaderManager: Failed to create geometry module: %s\n", e.what()));
+						}
+					}
+				}
+
+				shader.valid = shader.vertexModule && shader.fragmentModule && geoOk;
 			}
 		}
 
@@ -236,8 +274,27 @@ int VulkanShaderManager::loadShader(shader_type type, unsigned int flags)
 		}
 	}
 
+	// Compile geometry shader (thick outline variants)
+	bool geoOk = true;
+	if (shader_variant_uses_geometry(typeInfo, type, flags)) {
+		auto geoSpirv = m_compiler->compile(typeInfo->geo, vk::ShaderStageFlagBits::eGeometry, type, flags, requiresRaytracing);
+		geoOk = false;
+		if (!geoSpirv.empty()) {
+			vk::ShaderModuleCreateInfo createInfo;
+			createInfo.codeSize = geoSpirv.size() * sizeof(uint32_t);
+			createInfo.pCode = geoSpirv.data();
+			try {
+				shader.geometryModule = m_device.createShaderModuleUnique(createInfo);
+				geoOk = true;
+			} catch (const vk::SystemError& e) {
+				nprintf(("vulkan", "VulkanShaderManager: Failed to create geometry module for %s: %s\n",
+					typeInfo->geo, e.what()));
+			}
+		}
+	}
+
 	// Check if essential modules loaded
-	shader.valid = shader.vertexModule && shader.fragmentModule;
+	shader.valid = shader.vertexModule && shader.fragmentModule && geoOk;
 
 	if (!shader.valid) {
 		nprintf(("vulkan", "VulkanShaderManager: Failed to load shader type %d (flags=0x%x)\n",

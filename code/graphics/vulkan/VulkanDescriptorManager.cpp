@@ -4,6 +4,8 @@
 #include "VulkanRaytracing.h"
 
 
+#include "gr_vulkan.h"
+
 namespace graphics::vulkan {
 
 // ========== Static set templates ==========
@@ -442,6 +444,10 @@ vk::UniqueDescriptorSetLayout VulkanDescriptorManager::createSetLayout(
 		binding.descriptorType = b.type;
 		binding.descriptorCount = b.count;
 		binding.stageFlags = b.stages;
+		// the model geometry shader reads the same blocks as the vertex shader
+		if (Vk_geometry_shader_enabled && (b.stages & vk::ShaderStageFlagBits::eVertex)) {
+			binding.stageFlags |= vk::ShaderStageFlagBits::eGeometry;
+		}
 		binding.pImmutableSamplers = nullptr;
 		vkBindings.push_back(binding);
 	}
