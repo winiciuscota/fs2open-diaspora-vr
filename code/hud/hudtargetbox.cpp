@@ -737,12 +737,12 @@ void HudGaugeTargetBox::renderTargetShip(object *target_objp, bool config)
 
 			// maybe render a special hud-target-only model
 			if (target_sip->model_num_hud >= 0) {
-				if (!Gr_world_hud_active) model_render_immediate(&render_info, target_sip->model_num_hud, &target_objp->orient, &obj_pos);
+				if (!hud_vr_skip_model_insets()) model_render_immediate(&render_info, target_sip->model_num_hud, &target_objp->orient, &obj_pos);
 			} else {
 				render_info.set_replacement_textures(
 					model_get_instance(target_shipp->model_instance_num)->texture_replace);
 
-				if (!Gr_world_hud_active) model_render_immediate(&render_info, target_sip->model_num, &target_objp->orient, &obj_pos);
+				if (!hud_vr_skip_model_insets()) model_render_immediate(&render_info, target_sip->model_num, &target_objp->orient, &obj_pos);
 			}
 
 			Glowpoint_override = false;
@@ -893,7 +893,7 @@ void HudGaugeTargetBox::renderTargetDebris(object *target_objp)
 		auto pmi = debrisp->model_instance_num < 0 ? nullptr : model_get_instance(debrisp->model_instance_num);
 
 		// This calls the colour that doesn't get reset
-		if (!Gr_world_hud_active) submodel_render_immediate( &render_info, pm, pmi, debrisp->submodel_num, &target_objp->orient, &obj_pos);
+		if (!hud_vr_skip_model_insets()) submodel_render_immediate( &render_info, pm, pmi, debrisp->submodel_num, &target_objp->orient, &obj_pos);
 
 		if ( Monitor_mask >= 0 ) {
 			gr_stencil_set(GR_STENCIL_NONE);
@@ -1114,18 +1114,18 @@ void HudGaugeTargetBox::renderTargetWeapon(object *target_objp)
 			render_info.set_flags(flags | MR_AUTOCENTER | MR_IS_MISSILE | MR_NO_FOGGING);
 			render_info.set_replacement_textures(replacement_textures);
 
-			if (!Gr_world_hud_active) model_render_immediate( &render_info, viewed_model_num, &viewed_obj->orient, &obj_pos );
+			if (!hud_vr_skip_model_insets()) model_render_immediate( &render_info, viewed_model_num, &viewed_obj->orient, &obj_pos );
 		} else {
 			// maybe render a special hud-target-only model
 			// autocentering is bad in this one
 			if(homing_sip->model_num_hud >= 0){
 				render_info.set_flags(flags | MR_NO_FOGGING);
 
-				if (!Gr_world_hud_active) model_render_immediate( &render_info, homing_sip->model_num_hud, &viewed_obj->orient, &obj_pos);
+				if (!hud_vr_skip_model_insets()) model_render_immediate( &render_info, homing_sip->model_num_hud, &viewed_obj->orient, &obj_pos);
 			} else {
 				render_info.set_flags(flags | MR_NO_FOGGING);
 
-				if (!Gr_world_hud_active) model_render_immediate( &render_info, homing_sip->model_num, &viewed_obj->orient, &obj_pos );
+				if (!hud_vr_skip_model_insets()) model_render_immediate( &render_info, homing_sip->model_num, &viewed_obj->orient, &obj_pos );
 			}
 		}
 
@@ -1276,7 +1276,7 @@ void HudGaugeTargetBox::renderTargetAsteroid(object *target_objp)
 
 		render_info.set_flags(flags | MR_NO_FOGGING);
 
-		if (!Gr_world_hud_active) model_render_immediate( &render_info, Asteroid_info[asteroidp->asteroid_type].subtypes[pof].model_number, &target_objp->orient, &obj_pos );
+		if (!hud_vr_skip_model_insets()) model_render_immediate( &render_info, Asteroid_info[asteroidp->asteroid_type].subtypes[pof].model_number, &target_objp->orient, &obj_pos );
 
 		if ( Monitor_mask >= 0 ) {
 			gr_stencil_set(GR_STENCIL_NONE);

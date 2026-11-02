@@ -204,7 +204,8 @@ static int  Standalone_mission_flags[MAX_MISSIONS];
 static char *Campaign_missions[MAX_MISSIONS] = { NULL };
 static char *Campaign_mission_names[MAX_CAMPAIGN_MISSIONS] = { NULL };
 static int Campaign_mission_flags[MAX_MISSIONS];
-static int Simroom_show_all = 0;
+// Diaspora port: the simulator lists all the missions of a campaign by default (Ctrl+Shift+S still toggles it)
+static int Simroom_show_all = 1;
 // Diaspora port: mission descriptions shown under the simulator list, by mission filename (no extension case-folded)
 static SCP_unordered_map<SCP_string, SCP_string> Sim_mission_desc;
 
@@ -919,7 +920,7 @@ int sim_room_button_pressed(int n)
 			break;
 
 		case MISSION_TAB:
-			Simroom_show_all = 0;
+			Simroom_show_all = 1;
 			Player->readyroom_listing_mode = MODE_MISSIONS;
 			Selected_line = Scroll_offset = 0;
 			gamesnd_play_iface(InterfaceSounds::USER_SELECT);
@@ -937,7 +938,7 @@ int sim_room_button_pressed(int n)
 			}
 
 			if (Player->readyroom_listing_mode != MODE_CAMPAIGNS)
-				Simroom_show_all = 0;
+				Simroom_show_all = 1;
 
 			Player->readyroom_listing_mode = MODE_CAMPAIGNS;
 			Scroll_offset = 0;
@@ -1112,7 +1113,7 @@ void sim_room_init()
 	Sim_room_slider.create(&Ui_window, Sim_room_slider_coords[gr_screen.res][X_COORD], Sim_room_slider_coords[gr_screen.res][Y_COORD], Sim_room_slider_coords[gr_screen.res][W_COORD], Sim_room_slider_coords[gr_screen.res][H_COORD], 0, Sim_room_slider_filename[gr_screen.res], &sim_room_scroll_screen_up, &sim_room_scroll_screen_down, &sim_room_scroll_capture);
 
 	Num_campaign_missions_with_info = Num_standalone_missions_with_info = Standalone_mission_names_inited = Campaign_mission_names_inited = 0;
-	Simroom_show_all = 0;
+	Simroom_show_all = 1;
 	sim_room_build_listing();
 
 	// load special mission icons
@@ -1307,7 +1308,8 @@ void sim_room_do_frame(float  /*frametime*/)
 			else
 				Player->readyroom_listing_mode = MODE_MISSIONS;
 
-			Selected_line = Scroll_offset = Simroom_show_all = 0;
+			Selected_line = Scroll_offset = 0;
+			Simroom_show_all = 1;
 			gamesnd_play_iface(InterfaceSounds::USER_SELECT);
 			sim_room_build_listing();
 			break;
@@ -1964,7 +1966,29 @@ void campaign_room_do_frame(float  /*frametime*/)
 		case KEY_ESC:
 			gameseq_post_event(GS_EVENT_MAIN_MENU);
 			break;
+
+		case KEY_S:		// Diaspora port: Mission Simulator from the campaign screen
+			gamesnd_play_iface(InterfaceSounds::SWITCH_SCREENS);
+			gameseq_post_event(GS_EVENT_SIMULATOR_ROOM);
+			return;
 	}	// end switch
+
+	// Diaspora port: clickable "Mission Simulator" line (the campaign room art has no button for it)
+	{
+		const char* label = XSTR("Mission Simulator  [S]", -1);
+		int lw = 0, lh = 0;
+		gr_get_string_size(&lw, &lh, label);
+		const int lx = Cr_info_coords[gr_screen.res][0];
+		const int ly = Cr_info_coords[gr_screen.res][1] + Cr_info_coords[gr_screen.res][3] + lh;
+		int mx = 0, my = 0;
+		mouse_get_pos_unscaled(&mx, &my);
+		const bool over = mx >= lx && mx <= lx + lw && my >= ly && my <= ly + lh;
+		if (over && B1_JUST_RELEASED) {
+			gamesnd_play_iface(InterfaceSounds::SWITCH_SCREENS);
+			gameseq_post_event(GS_EVENT_SIMULATOR_ROOM);
+			return;
+		}
+	}
 
 	for (i=0; i<CR_NUM_BUTTONS; i++){
 		if (Cr_buttons[gr_screen.res][i].button.pressed()){
@@ -2046,6 +2070,21 @@ void campaign_room_do_frame(float  /*frametime*/)
 		gr_string(Cr_info_coords[gr_screen.res][0], Cr_info_coords[gr_screen.res][1] + y, line_text, GR_RESIZE_MENU);
 		y += font_height;
 		i++;
+	}
+
+	// Diaspora port: the Mission Simulator entry (see above)
+	{
+		const char* label = XSTR("Mission Simulator  [S]", -1);
+		int lw = 0, lh = 0;
+		gr_get_string_size(&lw, &lh, label);
+		const int lx = Cr_info_coords[gr_screen.res][0];
+		const int ly = Cr_info_coords[gr_screen.res][1] + Cr_info_coords[gr_screen.res][3] + lh;
+		int mx = 0, my = 0;
+		mouse_get_pos_unscaled(&mx, &my);
+		const bool over = mx >= lx && mx <= lx + lw && my >= ly && my <= ly + lh;
+		gr_set_color_fast(over ? &Color_bright_white : &Color_text_selected);
+		gr_string(lx, ly, label, GR_RESIZE_MENU);
+		gr_set_color_fast(&Color_text_normal);
 	}
 
 	if (Num_campaigns < 1) {

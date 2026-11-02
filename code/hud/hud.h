@@ -131,6 +131,9 @@ void hud_render_all(float frametime);
 extern int Hud_vr_pass;
 // set while the HUD is drawn onto the VR HUD layer: the lower-right gauge group is lifted off the cockpit panel
 extern bool Hud_vr_lift_lower_right;
+// VR: gauges that render a 3D model through their own camera (target view, shield icon) must not run on the world HUD plane or
+// on the VR HUD layer: their viewport/clip cannot follow it and the model streaks across the whole layer
+bool hud_vr_skip_model_insets();
 bool hud_gauge_is_world_aligned(int gauge_object);
 void hud_render_gauges(int cockpit_display_num, float frametime);
 void hud_stop_looped_engine_sounds();
