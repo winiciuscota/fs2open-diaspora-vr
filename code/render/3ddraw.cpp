@@ -15,6 +15,7 @@
 #include "graphics/grbatch.h"
 #include "graphics/tmapper.h"
 #include "graphics/matrix.h"
+#include "graphics/render.h"
 #include "io/key.h"
 #include "physics/physics.h"		// For Physics_viewer_bank for g3_draw_rotated_bitmap
 #include "render/3dinternal.h"
@@ -439,6 +440,7 @@ void g3_render_primitives_colored_textured(material* mat, vertex* verts, int n_v
 // adapted from g3_draw_polygon()
 void g3_render_rect_oriented_internal(material* material_params, vec3d *pos, matrix *ori, float width, float height)
 {
+	gr_debug_vr_hud_probe("draws a 3D rect");
 	//idiot-proof
 	if ( width == 0 || height == 0 )
 		return;

@@ -1014,6 +1014,21 @@ static void gr_line(float x1, float y1, float x2, float y2, int resize_mode) {
 // which show up as streaks across the VR HUD layer
 int Gr_debug_hud_gauge = -1;
 
+// logs (rate limited per gauge type) when a HUD gauge draws something of kind `what` onto the screen canvas in VR
+void gr_debug_vr_hud_probe(const char* what)
+{
+	if (!openxr_enabled() || Gr_debug_hud_gauge < 0)
+		return;
+	static int stamps[64] = {};
+	const int slot = Gr_debug_hud_gauge & 63;
+	const int now = timer_get_milliseconds();
+	if (now - stamps[slot] < 5000)
+		return;
+	stamps[slot] = now;
+	mprintf(("VRHUD probe: gauge type %d %s (render target %d, canvas %dx%d)\n", Gr_debug_hud_gauge, what,
+		gr_screen.rendering_to_texture, gr_screen.max_w, gr_screen.max_h));
+}
+
 void gr_line(int x1, int y1, int x2, int y2, int resize_mode) {
 	if (openxr_enabled() && Gr_debug_hud_gauge >= 0 && ((abs(x1) <= 2 && abs(y1) <= 2) || (abs(x2) <= 2 && abs(y2) <= 2))) {
 		static int log_stamp = 0;
