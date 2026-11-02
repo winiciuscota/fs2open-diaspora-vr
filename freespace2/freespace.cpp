@@ -4209,55 +4209,25 @@ void game_render_post_frame()
 
 // ---- VR: world-fixed HUD ---------------------------------------------------------------------------------------
 // The stock VR path draws the HUD in 2D screen space and slides it around by the head/nose angle, which looks like a
-// flat sheet glued in front of the face. Instead the HUD (gauges, animations and script overlays) is drawn once per
-// frame into a texture through the ship's own, non-head-tracked camera, and every eye then sees that texture as a quad
-// fixed to the cockpit, a fixed distance ahead, so you can look around it.
-// Currently opt-in (FSO_VR_HUD_WORLD=1), see vr_world_hud_active().
-static int Vr_hud_target = -1;
-static bool Vr_hud_dirty = true;			// set once per VR frame, before the first eye
-static bool Vr_hud_target_failed = false;
-constexpr int VR_HUD_TEX_W = 2048;
-constexpr int VR_HUD_TEX_H = 1536;			// 4:3, the HUD's native layout
-constexpr float VR_HUD_ZOOM = 0.75f;		// camera zoom used for the HUD texture (horizontal fov = zoom * PROJ_FOV_FACTOR)
+// flat sheet glued in front of the face. Here the engine's normal 2D HUD drawing (gauges, animations and script
+// overlays) is kept, but gr_set_2d_matrix() maps its canvas onto a plane fixed to the cockpit, a fixed distance ahead,
+// and projects it through each eye's own view, so you can look around the HUD.
+// Opt-in for now: FSO_VR_HUD_WORLD=1.
+constexpr float VR_HUD_ZOOM = 0.75f;		// camera zoom of the HUD pass (horizontal fov = zoom * PROJ_FOV_FACTOR)
 constexpr float VR_HUD_DISTANCE = 14.0f;	// metres ahead of the cockpit eye point
 
 static bool vr_world_hud_active()
 {
-	// EXPERIMENTAL and off by default: the gauges switch to their cockpit-display drawing mode while a texture is the
-	// render target, so the HUD comes out empty. FSO_VR_HUD_WORLD=1 enables it for development.
 	static const bool world_hud = getenv("FSO_VR_HUD_WORLD") != nullptr;
-	return world_hud && !Vr_hud_target_failed && openxr_enabled();
+	return world_hud && openxr_enabled();
 }
 
-// Draws the HUD layers into the HUD texture. Returns false (and draws nothing) when the target is not available.
-static bool vr_render_hud_texture(const std::function<void(const fov_t*)>& draw_layers)
-{
-	if (Vr_hud_target < 0) {
-		Vr_hud_target = bm_make_render_target(VR_HUD_TEX_W, VR_HUD_TEX_H, BMP_FLAG_RENDER_TARGET_DYNAMIC);
-	}
-	if (Vr_hud_target < 0 || !bm_set_render_target(Vr_hud_target)) {
-		mprintf(("VR: could not create the HUD render target, falling back to the head-locked HUD\n"));
-		Vr_hud_target_failed = true;
-		return false;
-	}
-
-	gr_reset_clip();
-	gr_set_clear_color(0, 0, 0);
-	gr_clear();
-
-	const fov_t hud_zoom = VR_HUD_ZOOM;
-	draw_layers(&hud_zoom);
-
-	bm_set_render_target(-1);
-	return true;
-}
-
-// Shows the HUD texture as a cockpit-fixed quad in the view of the current eye.
-static void vr_draw_hud_quad(camid cid, const vec3d* offset, const matrix* rot_offset, const fov_t* fov_override)
+// Computes the eye's view/projection and the canvas->plane transform and switches gr_set_2d_matrix() over to them.
+static bool vr_begin_world_hud(camid cid, const vec3d* offset, const matrix* rot_offset, const fov_t* fov_override)
 {
 	camera* cam = cid.getCamera();
-	if (cam == nullptr || Vr_hud_target < 0)
-		return;
+	if (cam == nullptr)
+		return false;
 
 	vec3d cam_pos, eye_pos;
 	matrix cam_orient, eye_orient;
@@ -4275,26 +4245,38 @@ static void vr_draw_hud_quad(camid cid, const vec3d* offset, const matrix* rot_o
 		eye_orient = *rot_offset * cam_orient;
 	}
 
-	// the quad: facing the pilot, fixed to the cockpit, sized so it spans exactly the fov the texture was drawn with
+	gr_reset_clip();
+
+	matrix4 eye_view, eye_proj;
+	g3_start_frame(0);
+	g3_set_view_matrix(&eye_pos, &eye_orient, fov_override ? *fov_override : cam->get_fov());
+	gr_set_proj_matrix(Proj_fov, i2fl(gr_screen.max_w) / i2fl(gr_screen.max_h), Min_draw_distance, Max_draw_distance);
+	gr_set_view_matrix(&Eye_position, &Eye_matrix);
+	eye_view = gr_view_matrix;
+	eye_proj = gr_projection_matrix;
+	gr_end_view_matrix();
+	gr_end_proj_matrix();
+	g3_end_frame();
+
+	// the plane: spans exactly the fov the HUD pass is drawn with, VR_HUD_DISTANCE ahead of the cockpit eye point
+	const float W = i2fl(gr_screen.max_w), H = i2fl(gr_screen.max_h);
 	const float half_w = VR_HUD_DISTANCE * tanf(VR_HUD_ZOOM * PROJ_FOV_FACTOR * 0.5f);
-	const float half_h = half_w * (static_cast<float>(VR_HUD_TEX_H) / static_cast<float>(VR_HUD_TEX_W));
+	const float half_h = half_w * (H / W);
 
 	vec3d hud_pos;
 	vm_vec_scale_add(&hud_pos, &cam_pos, &cam_orient.vec.fvec, VR_HUD_DISTANCE);
 
-	matrix quad_orient = cam_orient;
-	vm_vec_negate(&quad_orient.vec.fvec);
-	vm_vec_negate(&quad_orient.vec.rvec);
+	matrix4 plane_to_world, canvas_to_plane, canvas_to_world;
+	vm_matrix4_set_transform(&plane_to_world, &cam_orient, &hud_pos);
+	vm_matrix4_set_identity(&canvas_to_plane);
+	canvas_to_plane.a2d[0][0] = 2.0f * half_w / W;		// canvas x (pixels, right) -> plane x
+	canvas_to_plane.a2d[1][1] = -2.0f * half_h / H;		// canvas y (pixels, down) -> plane y (up)
+	canvas_to_plane.a2d[3][0] = -half_w;
+	canvas_to_plane.a2d[3][1] = half_h;
+	vm_matrix4_x_matrix4(&canvas_to_world, &plane_to_world, &canvas_to_plane);
 
-	g3_start_frame(0);
-	g3_set_view_matrix(&eye_pos, &eye_orient, fov_override ? *fov_override : cam->get_fov());
-
-	material mat;
-	material_set_unlit(&mat, Vr_hud_target, 1.0f, true, false);
-	mat.set_blend_mode(ALPHA_BLEND_ADDITIVE);	// the HUD is light on black
-	g3_render_rect_oriented(&mat, &hud_pos, &quad_orient, half_w, half_h);
-
-	g3_end_frame();
+	gr_set_world_hud(eye_view, eye_proj, canvas_to_world);
+	return true;
 }
 
 void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const matrix* rot_offset = nullptr, const fov_t* fov_override = nullptr) {
@@ -4357,16 +4339,10 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 		}
 	};
 
-	if (vr_world_hud_active() && cid.isValid()) {
-		if (Vr_hud_dirty) {
-			Vr_hud_dirty = false;
-			if (!vr_render_hud_texture(draw_hud_layers)) {
-				draw_hud_layers(fov_override);
-			}
-		}
-		if (!Vr_hud_target_failed) {
-			vr_draw_hud_quad(cid, offset, rot_offset, fov_override);
-		}
+	if (vr_world_hud_active() && cid.isValid() && vr_begin_world_hud(cid, offset, rot_offset, fov_override)) {
+		const fov_t hud_zoom = VR_HUD_ZOOM;
+		draw_hud_layers(&hud_zoom);
+		gr_clear_world_hud();
 	} else {
 		draw_hud_layers(fov_override);
 	}
@@ -4533,7 +4509,6 @@ void game_frame(bool paused)
 				SCP_vector<light> Lights_copy = Lights, Static_light_copy = Static_light;
 
 				const auto& pose = openxr_start_stereo_frame();
-				Vr_hud_dirty = true;
 
 				util::Random::seed(random);
 				game_do_full_frame(DEBUG_TIMER_CALL &pose.eyes[0].offset, &pose.eyes[0].orientation, &pose.eyes[0].zoom);

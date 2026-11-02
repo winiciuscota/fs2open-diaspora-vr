@@ -277,7 +277,8 @@ void gr_opengl_set_clip(int x, int y, int w, int h, int resize_mode)
 	gr_screen.clip_center_y = (gr_screen.clip_top + gr_screen.clip_bottom) * 0.5f;
 
 	// just return early if we aren't actually going to need the scissor test
-	if ( (x == 0) && (y == 0) && (w == max_w) && (h == max_h) ) {
+	// (the world-fixed VR HUD draws on a projected plane, a screen-space scissor would cut it wrongly)
+	if ( Gr_world_hud_active || ((x == 0) && (y == 0) && (w == max_w) && (h == max_h)) ) {
 		GL_state.ScissorTest(GL_FALSE);
 		return;
 	}

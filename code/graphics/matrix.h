@@ -28,6 +28,12 @@ void gr_deactivate_ortho_proj_override();
 void gr_set_view_matrix(const vec3d* pos, const matrix* orient);
 void gr_end_view_matrix();
 
+// VR world-fixed HUD: while Gr_world_hud_active is set, gr_set_2d_matrix() maps the 2D canvas onto a plane in the 3D
+// world (canvas_to_world) as seen through the given eye view/projection, instead of using a screen-space ortho matrix.
+extern bool Gr_world_hud_active;
+void gr_set_world_hud(const matrix4& eye_view, const matrix4& eye_proj, const matrix4& canvas_to_world);
+void gr_clear_world_hud();
+
 void gr_set_2d_matrix(/*int x, int y, int w, int h*/);
 void gr_end_2d_matrix();
 

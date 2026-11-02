@@ -256,6 +256,22 @@ void gr_end_view_matrix()
 	matrix_uniform_up_to_date = false;
 }
 
+bool Gr_world_hud_active = false;
+static matrix4 Gr_world_hud_view, Gr_world_hud_proj, Gr_world_hud_model;
+
+void gr_set_world_hud(const matrix4& eye_view, const matrix4& eye_proj, const matrix4& canvas_to_world)
+{
+	Gr_world_hud_view = eye_view;
+	Gr_world_hud_proj = eye_proj;
+	Gr_world_hud_model = canvas_to_world;
+	Gr_world_hud_active = true;
+}
+
+void gr_clear_world_hud()
+{
+	Gr_world_hud_active = false;
+}
+
 // set a view and projection matrix for a 2D element
 // TODO: this probably needs to accept values
 void gr_set_2d_matrix(/*int x, int y, int w, int h*/)
@@ -267,6 +283,27 @@ void gr_set_2d_matrix(/*int x, int y, int w, int h*/)
 
 	Assert( htl_2d_matrix_set == 0 );
 	Assert( htl_2d_matrix_depth == 0 );
+
+	if (Gr_world_hud_active) {
+		// the canvas is a plane in the world: project it through the eye's own view and projection
+		gr_set_viewport(0, 0, gr_screen.max_w, gr_screen.max_h);
+
+		gr_last_projection_matrix = gr_projection_matrix;
+		gr_projection_matrix = Gr_world_hud_proj;
+
+		gr_model_matrix_stack.push_and_replace(Gr_world_hud_model);
+
+		gr_last_view_matrix = gr_view_matrix;
+		gr_view_matrix = Gr_world_hud_view;
+
+		vm_matrix4_x_matrix4(&gr_model_view_matrix, &gr_view_matrix, &Gr_world_hud_model);
+
+		htl_2d_matrix_set = true;
+		htl_2d_matrix_depth++;
+
+		matrix_uniform_up_to_date = false;
+		return;
+	}
 
 	// the viewport needs to be the full screen size since glOrtho() is relative to it
 	gr_set_viewport(0, 0, gr_screen.max_w, gr_screen.max_h);

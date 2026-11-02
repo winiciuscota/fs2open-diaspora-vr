@@ -317,7 +317,8 @@ void VulkanDrawManager::setClip(int x, int y, int w, int h, int resize_mode)
 	gr_screen.clip_center_y = (gr_screen.clip_top + gr_screen.clip_bottom) * 0.5f;
 
 	// Check if full screen (disable scissor)
-	if ((x == 0) && (y == 0) && (w == max_w) && (h == max_h)) {
+	// (the world-fixed VR HUD draws on a projected plane, a screen-space scissor would cut it wrongly)
+	if (Gr_world_hud_active || ((x == 0) && (y == 0) && (w == max_w) && (h == max_h))) {
 		stateTracker->setScissorEnabled(false);
 		return;
 	}
