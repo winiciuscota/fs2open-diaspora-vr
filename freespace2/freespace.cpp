@@ -4212,14 +4212,14 @@ void game_render_post_frame()
 // flat sheet glued in front of the face. Here the engine's normal 2D HUD drawing (gauges, animations and script
 // overlays) is kept, but gr_set_2d_matrix() maps its canvas onto a plane fixed to the cockpit, a fixed distance ahead,
 // and projects it through each eye's own view, so you can look around the HUD.
-// Opt-in for now: FSO_VR_HUD_WORLD=1.
-constexpr float VR_HUD_ZOOM = 0.75f;		// camera zoom of the HUD pass (horizontal fov = zoom * PROJ_FOV_FACTOR)
+// Default in VR; FSO_VR_HUD_HEAD=1 restores the stock head-locked HUD.
+constexpr float VR_HUD_ZOOM = 0.9f; 		// camera zoom of the HUD pass (horizontal fov = zoom * PROJ_FOV_FACTOR)
 constexpr float VR_HUD_DISTANCE = 14.0f;	// metres ahead of the cockpit eye point
 
 static bool vr_world_hud_active()
 {
-	static const bool world_hud = getenv("FSO_VR_HUD_WORLD") != nullptr;
-	return world_hud && openxr_enabled();
+	static const bool head_locked = getenv("FSO_VR_HUD_HEAD") != nullptr;
+	return !head_locked && openxr_enabled();
 }
 
 // Computes the eye's view/projection and the canvas->plane transform and switches gr_set_2d_matrix() over to them.
