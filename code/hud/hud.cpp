@@ -15,6 +15,7 @@
 #include "freespace.h"
 #include "gamesnd/eventmusic.h"
 #include "gamesnd/gamesnd.h"
+#include "graphics/matrix.h"
 #include "graphics/openxr.h"
 #include "graphics/render.h"
 #include "globalincs/alphacolors.h"
@@ -2101,7 +2102,10 @@ static void vr_hud_lift_begin(HudGauge* gauge)
 	static const float dy_r = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -150.0f;
 	static const float dx_l = getenv("FSO_VR_HUD_LEFT_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DX"))) : 60.0f;
 	static const float dy_l = getenv("FSO_VR_HUD_LEFT_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DY"))) : -150.0f;
-	const float dx = right ? dx_r : dx_l, dy = right ? dy_r : dy_l;
+	// the ship icon sits next to the stores: pull it towards the centre (FSO_VR_HUD_SHIP_DX, default -90 units)
+	static const float dx_ship = getenv("FSO_VR_HUD_SHIP_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_SHIP_DX"))) : -90.0f;
+	const float dx = (right ? dx_r : dx_l) + (gauge->getObjectType() == HUD_OBJECT_HARDPOINTS ? dx_ship : 0.0f);
+	const float dy = right ? dy_r : dy_l;
 	vr_hud_lift_x = fl2i(dx * i2fl(w) / 1024.0f);
 	vr_hud_lift_y = fl2i(dy * i2fl(w) / 1024.0f);
 	gauge->shiftPosition(vr_hud_lift_x, vr_hud_lift_y);
