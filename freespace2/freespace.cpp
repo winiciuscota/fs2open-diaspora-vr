@@ -4406,6 +4406,19 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 		}
 	};
 
+	// one line every few seconds in fs2_open.log saying which HUD path this frame took (VR debugging)
+	if (openxr_enabled()) {
+		static int vr_hud_log_stamp = 0;
+		const int now = timer_get_milliseconds();
+		if (now - vr_hud_log_stamp > 5000) {
+			vr_hud_log_stamp = now;
+			mprintf(("VRHUD path: world_active=%d cam_valid=%d panel=%d fov_override=%d pass_ok_scripting=%d dist=%.1f eye_off=(%.3f,%.3f,%.3f)\n",
+				vr_world_hud_active() ? 1 : 0, cid.isValid() ? 1 : 0, vr_hud_panel_enabled() ? 1 : 0, fov_override != nullptr ? 1 : 0,
+				Scripting_didnt_draw_hud, vr_hud_distance(),
+				offset ? offset->xyz.x : 0.0f, offset ? offset->xyz.y : 0.0f, offset ? offset->xyz.z : 0.0f));
+		}
+	}
+
 	if (vr_world_hud_active() && cid.isValid() && vr_begin_world_hud(cid, offset, rot_offset, fov_override, false)) {
 		const fov_t hud_zoom = vr_hud_zoom();
 		if (vr_hud_panel_enabled()) {
@@ -4586,6 +4599,15 @@ void game_frame(bool paused)
 				SCP_vector<light> Lights_copy = Lights, Static_light_copy = Static_light;
 
 				auto pose = openxr_start_stereo_frame();
+
+				// the pilot's head sits further back than the Viper's eye point suits a headset: move both eyes forward
+				// (metres, ship space; FSO_VR_EYE_FORWARD overrides, default 0.2)
+				{
+					static const float eye_forward = vr_hud_env("FSO_VR_EYE_FORWARD", 0.2f);
+					for (auto& eye : pose.eyes) {
+						eye.offset.xyz.z += eye_forward;
+					}
+				}
 
 				// test aid: FSO_VR_FAKE_HEAD=1 sways the head 0.3 m sideways and turns it ~12 degrees (2 s period), to
 				// check on a headless runtime that the world HUD stays put while the head moves
