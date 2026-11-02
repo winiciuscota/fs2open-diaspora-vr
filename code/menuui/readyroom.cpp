@@ -436,10 +436,8 @@ int sim_room_standalone_mission_filter(const char *filename)
 	int type;
 	char mission_name[255];
 
-	// Check if a campaign mission (single and multi)
-	if (campaign_mission_hash_collision(filename)) {
-		return 0;
-	} 
+	// Diaspora port: campaign missions stay in the list too, so any mission of any campaign can be flown from here
+	// (the stock simulator only lists missions that belong to no campaign)
 
 	// Check if a standalone multi mission OR Mdisk mission with data
 	type = mission_parse_is_multi(filename, mission_name);

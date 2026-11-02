@@ -845,7 +845,52 @@ static void set_dead_view_letterbox_clip()
  * Call once a frame to diminish the flash effect to 0.
  * @param frametime Period over which to dimish at ::DIMINISH_RATE
  */
-static void game_flash_diminish(float frametime)
+// the full-screen palette flash (hits, explosions, sun glare)
+static void game_flash_draw()
+{
+	if ( Use_palette_flash )	{
+		int r,g,b;
+
+		// Change the 200 to change the color range of colors.
+		r = fl2i( Game_flash_red*128.0f );  
+		g = fl2i( Game_flash_green*128.0f );   
+		b = fl2i( Game_flash_blue*128.0f );  
+
+		if ( Sun_spot > 0.0f && gr_sunglare_enabled() && !gr_lightshafts_enabled()) {
+			r += fl2i(Sun_spot*128.0f);
+			g += fl2i(Sun_spot*128.0f);
+			b += fl2i(Sun_spot*128.0f);
+		}
+
+		if ( Big_expl_flash.cur_flash_intensity  > 0.0f ) {
+			r += fl2i(Big_expl_flash.cur_flash_intensity*128.0f);
+			g += fl2i(Big_expl_flash.cur_flash_intensity*128.0f);
+			b += fl2i(Big_expl_flash.cur_flash_intensity*128.0f);
+		}
+
+		if ( r < 0 ) r = 0; else if ( r > 255 ) r = 255;
+		if ( g < 0 ) g = 0; else if ( g > 255 ) g = 255;
+		if ( b < 0 ) b = 0; else if ( b > 255 ) b = 255;
+
+		if ( (r!=0) || (g!=0) || (b!=0) ) {
+			// the letterbox bars are drawn earlier in the frame, but game_render_hud calls gr_reset_clip()
+			// before this runs, so the flash would paint over the bars unless we re-apply the letterbox clip
+			bool letterbox_active = (Game_mode & GM_DEAD) || (supernova_stage() >= SUPERNOVA_STAGE::HIT);
+			if (letterbox_active) {
+				set_dead_view_letterbox_clip();
+			}
+
+			gr_flash( r, g, b );
+
+			if (letterbox_active) {
+				gr_reset_clip();
+			}
+		}
+	}
+	
+}
+
+static void game_flash_diminish(float frametime, bool draw)
 {
 	float dec_amount = frametime*DIMINISH_RATE;
 
@@ -899,46 +944,9 @@ static void game_flash_diminish(float frametime)
 		Big_expl_flash.cur_flash_intensity = 0.0f;
 	}
 	
-	if ( Use_palette_flash )	{
-		int r,g,b;
-
-		// Change the 200 to change the color range of colors.
-		r = fl2i( Game_flash_red*128.0f );  
-		g = fl2i( Game_flash_green*128.0f );   
-		b = fl2i( Game_flash_blue*128.0f );  
-
-		if ( Sun_spot > 0.0f && gr_sunglare_enabled() && !gr_lightshafts_enabled()) {
-			r += fl2i(Sun_spot*128.0f);
-			g += fl2i(Sun_spot*128.0f);
-			b += fl2i(Sun_spot*128.0f);
-		}
-
-		if ( Big_expl_flash.cur_flash_intensity  > 0.0f ) {
-			r += fl2i(Big_expl_flash.cur_flash_intensity*128.0f);
-			g += fl2i(Big_expl_flash.cur_flash_intensity*128.0f);
-			b += fl2i(Big_expl_flash.cur_flash_intensity*128.0f);
-		}
-
-		if ( r < 0 ) r = 0; else if ( r > 255 ) r = 255;
-		if ( g < 0 ) g = 0; else if ( g > 255 ) g = 255;
-		if ( b < 0 ) b = 0; else if ( b > 255 ) b = 255;
-
-		if ( (r!=0) || (g!=0) || (b!=0) ) {
-			// the letterbox bars are drawn earlier in the frame, but game_render_hud calls gr_reset_clip()
-			// before this runs, so the flash would paint over the bars unless we re-apply the letterbox clip
-			bool letterbox_active = (Game_mode & GM_DEAD) || (supernova_stage() >= SUPERNOVA_STAGE::HIT);
-			if (letterbox_active) {
-				set_dead_view_letterbox_clip();
-			}
-
-			gr_flash( r, g, b );
-
-			if (letterbox_active) {
-				gr_reset_clip();
-			}
-		}
+	if (draw) {
+		game_flash_draw();
 	}
-	
 }
 
 
@@ -4071,9 +4079,10 @@ void game_render_hud(camid cid, const fov_t* fov_override = nullptr, int vr_pass
 	hud_render_all(frametime);
 	Hud_vr_pass = 0;
 
-	// Diminish the palette effect
+	// Diminish the palette effect. On the VR HUD layer the flash would tint the whole HUD quad, so it is only advanced
+	// there and drawn into each eye image instead (game_do_full_frame).
 	if (vr_pass != 1) {
-		game_flash_diminish(flFrametime);
+		game_flash_diminish(flFrametime, !Game_vr_hud_layer_pass);
 	}
 }
 
@@ -4445,6 +4454,11 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 	// save the eye position and orientation
 	if (Game_mode & GM_MULTIPLAYER) {
 		cid.getCamera()->get_info(&Net_player->s_info.eye_pos, &Net_player->s_info.eye_orient);
+	}
+
+	if (Game_vr_hud_layer) {
+		gr_reset_clip();
+		game_flash_draw();
 	}
 
 	if (!Game_vr_hud_layer) {
