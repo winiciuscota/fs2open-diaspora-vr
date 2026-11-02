@@ -300,6 +300,9 @@ static XrAction xr_act_aim = XR_NULL_HANDLE;
 static std::array<XrSpace, 2> xr_aim_spaces{ XR_NULL_HANDLE, XR_NULL_HANDLE };
 static float xr_pointer_u = -1.0f, xr_pointer_v = -1.0f;
 static bool xr_pointer_down = false;
+// where the right controller appears on the menu plane when seen from the head (0..1 = on the screen, outside = beyond its edge)
+static bool xr_pointer_hand_valid = false;
+static float xr_pointer_hand_u = 0.0f, xr_pointer_hand_v = 0.0f;
 static SDL_Joystick* xr_pad = nullptr;
 static bool xr_pad_attach_failed = false;
 static float xr_throttle = 0.5f;
@@ -400,6 +403,14 @@ static Sint16 openxr_axis16(float v) {
 
 // Menus are drawn as a flat plane (x in +-2*clip_aspect, y in +-2, z = 4 in FSO space, see gr_opengl_openxr_flip) and the
 // engine paints its own cursor at the mouse position, so the right controller's aim ray is turned into mouse input.
+bool openxr_get_pointer_hand(float* u, float* v) {
+	if (!xr_pointer_hand_valid)
+		return false;
+	*u = xr_pointer_hand_u;
+	*v = xr_pointer_hand_v;
+	return true;
+}
+
 static void openxr_update_pointer(bool trigger, bool squeeze) {
 	SDL_Window* window = os::getSDLMainWindow();
 	if (window == nullptr || xr_aim_spaces[1] == XR_NULL_HANDLE || xr_stage != OpenXRFBStage::NONE)
@@ -435,6 +446,16 @@ static void openxr_update_pointer(bool trigger, bool squeeze) {
 	const float v = (1.0f - hy / 2.0f) * 0.5f;	// 0 = top of the screen
 	if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f)
 		return;
+
+	// the controller itself, projected from the head (the origin of this frame) onto the menu plane: a laser from the
+	// hand to the cursor is the line between the two points in the menu image
+	xr_pointer_hand_valid = false;
+	if (oz > 0.05f) {
+		const float k = 4.0f / oz;
+		xr_pointer_hand_u = (ox * k / halfw + 1.0f) * 0.5f;
+		xr_pointer_hand_v = (1.0f - oy * k / 2.0f) * 0.5f;
+		xr_pointer_hand_valid = true;
+	}
 
 	int ww = 0, wh = 0;
 	SDL_GetWindowSize(window, &ww, &wh);

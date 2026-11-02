@@ -1,12 +1,15 @@
 
 #include "VulkanOpenXR.h"
 
+#include <algorithm>
+
 #include "VulkanBarrier.h"
 #include "VulkanRenderer.h"
 #include "gr_vulkan.h"
 
 #include "graphics/2d.h"
 #include "graphics/openxr.h"
+#include "graphics/render.h"
 
 #ifdef FS_OPENXR
 
@@ -214,6 +217,33 @@ void draw_cursor()
 
 	int mouseX, mouseY;
 	mouse_get_pos(&mouseX, &mouseY);
+
+	// laser: a line from the cursor towards the controller (cut where it leaves the screen)
+	float hand_u, hand_v;
+	if (openxr_get_pointer_hand(&hand_u, &hand_v)) {
+		const float w = i2fl(gr_screen.max_w), h = i2fl(gr_screen.max_h);
+		const float cx = i2fl(mouseX), cy = i2fl(mouseY);
+		const float dx = hand_u * w - cx, dy = hand_v * h - cy;
+		float t = 1.0f;
+		if (dx > 0.0f)
+			t = std::min(t, (w - 1.0f - cx) / dx);
+		else if (dx < 0.0f)
+			t = std::min(t, (0.0f - cx) / dx);
+		if (dy > 0.0f)
+			t = std::min(t, (h - 1.0f - cy) / dy);
+		else if (dy < 0.0f)
+			t = std::min(t, (0.0f - cy) / dy);
+
+		if (t > 0.0f) {
+			const int ex = fl2i(cx + dx * t), ey = fl2i(cy + dy * t);
+			const int thick = std::max(1, gr_screen.max_h / 540);
+			gr_set_color(110, 200, 255);
+			for (int o = -thick; o <= thick; o++) {
+				gr_line(mouseX + o, mouseY, ex + o, ey, GR_RESIZE_NONE);
+				gr_line(mouseX, mouseY + o, ex, ey + o, GR_RESIZE_NONE);
+			}
+		}
+	}
 
 	gr_set_bitmap(cursorBitmap);
 	gr_bitmap(mouseX, mouseY, GR_RESIZE_NONE);
