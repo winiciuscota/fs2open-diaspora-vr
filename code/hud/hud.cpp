@@ -2086,6 +2086,8 @@ static void vr_hud_shift_gauge_begin(const HudGauge* gauge)
 	int x = 0, y = 0;
 	gauge->getPosition(&x, &y);
 	const int w = gauge->getBaseWidth(), h = gauge->getBaseHeight();
+	if (getenv("FSO_VR_HUD_DEBUG"))
+		mprintf(("VRHUD gauge type=%d pos=%d,%d base=%dx%d max=%dx%d\n", gauge->getObjectType(), x, y, w, h, gr_screen.max_w, gr_screen.max_h));
 	if (w <= 0 || h <= 0 || x < w * 62 / 100 || y < h * 62 / 100)
 		return;
 

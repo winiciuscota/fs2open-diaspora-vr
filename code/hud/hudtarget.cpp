@@ -7818,7 +7818,7 @@ void HudGaugeHardpoints::initDrawOptions(bool primary_models, bool secondary_mod
 void HudGaugeHardpoints::render(float /*frametime*/, bool config)
 {
 	// not yet supported in config
-	if (config) {
+	if (config || Gr_world_hud_active) {
 		return;
 	}
 	
