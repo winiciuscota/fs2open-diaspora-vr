@@ -16,6 +16,7 @@
 #include "gamesnd/eventmusic.h"
 #include "gamesnd/gamesnd.h"
 #include "graphics/openxr.h"
+#include "graphics/render.h"
 #include "globalincs/alphacolors.h"
 #include "globalincs/linklist.h"
 #include "hud/hud.h"
@@ -2221,7 +2222,9 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 			sip->hud_gauges[j]->resetClip();
 			sip->hud_gauges[j]->setFont();
 			vr_hud_lift_begin(sip->hud_gauges[j].get());
+			Gr_debug_hud_gauge = sip->hud_gauges[j]->getObjectType();
 			sip->hud_gauges[j]->render(frametime);
+			Gr_debug_hud_gauge = -1;
 			vr_hud_lift_end();
 		}
 	} else {
@@ -2247,7 +2250,9 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 			default_hud_gauges[j]->resetClip();
 			default_hud_gauges[j]->setFont();
 			vr_hud_lift_begin(default_hud_gauges[j].get());
+			Gr_debug_hud_gauge = default_hud_gauges[j]->getObjectType();
 			default_hud_gauges[j]->render(frametime);
+			Gr_debug_hud_gauge = -1;
 			vr_hud_lift_end();
 		}
 	}

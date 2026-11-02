@@ -933,21 +933,8 @@ void main_hall_do(float frametime)
 							break;
 						}
 					} else {
-						// Diaspora port: the main hall has no simulator door, so this door offers it (any mission of
-						// any campaign can be flown from the simulator's Single missions list)
+						gameseq_post_event(GS_EVENT_NEW_CAMPAIGN);
 						gamesnd_play_iface(InterfaceSounds::IFACE_MOUSE_CLICK);
-						int rc = popup(0,
-							3,
-							XSTR("Continue Campaign", -1),
-							XSTR("Mission Simulator", -1),
-							XSTR("Cancel", 641),
-							XSTR("Continue the campaign, or pick any mission in the Mission Simulator?", -1));
-
-						if (rc == 0) {
-							gameseq_post_event(GS_EVENT_NEW_CAMPAIGN);
-						} else if (rc == 1) {
-							gameseq_post_event(GS_EVENT_SIMULATOR_ROOM);
-						}
 					}
 					break;
 

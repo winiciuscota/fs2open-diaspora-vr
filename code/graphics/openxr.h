@@ -61,6 +61,12 @@ void openxr_hud_layer_end();
 // half vertical FOV (radians) of the symmetric camera the HUD layer is drawn with, and the quad's distance (metres)
 float openxr_hud_half_fov();
 float openxr_hud_distance();
+// size factor of the flat screen that shows menus, briefings and cutscenes (FSO_VR_MENU_SCALE, default 1.35)
+float openxr_menu_scale();
+// where the player's head points (world space), updated every VR frame: "Target Ship in Reticle" uses it in VR
+extern bool Openxr_gaze_valid;
+extern vec3d Openxr_gaze_pos, Openxr_gaze_dir;
+
 // set by the graphics backend that implements the HUD layer
 extern bool (*Openxr_hud_layer_begin_fn)();
 extern void (*Openxr_hud_layer_end_fn)();

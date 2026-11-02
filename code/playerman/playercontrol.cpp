@@ -42,6 +42,8 @@
 
 #ifndef NDEBUG
 #include "io/key.h"
+#include "io/keycontrol.h"
+#include "graphics/openxr.h"
 #endif
 
 
@@ -462,6 +464,25 @@ void do_view_slew()
 		return;
 	}
 
+	// VR: the head already looks around, and a padlock view that swings the camera is disorienting in a headset. The
+	// padlock directions target instead (up: next closest hostile, down: closest attacker, right/left: next/previous
+	// ship), on press. FSO_VR_PADLOCK=1 keeps the padlock views.
+	if (openxr_enabled() && !(getenv("FSO_VR_PADLOCK") && atoi(getenv("FSO_VR_PADLOCK")) != 0)) {
+		static bool held[4] = { false, false, false, false };
+		const int dirs[4] = { PADLOCK_UP, PADLOCK_DOWN, PADLOCK_RIGHT, PADLOCK_LEFT };
+		const int actions[4] = { TARGET_NEXT_CLOSEST_HOSTILE, TARGET_CLOSEST_SHIP_ATTACKING_SELF, TARGET_NEXT, TARGET_PREV };
+		for (int i = 0; i < 4; i++) {
+			const bool now = check_control(dirs[i]) != 0;
+			if (now && !held[i]) {
+				button_info_set(&Player->bi, actions[i]);
+			}
+			held[i] = now;
+		}
+		if (Viewer_mode & VM_PADLOCK_ANY) {
+			Viewer_mode &= ~(VM_PADLOCK_ANY);
+			Viewer_mode |= (VM_CENTERING | VM_CAMERA_LOCKED);
+		}
+	} else
 	// Check Padlock controls
 	// (Check Slew_locked second so that we don't short-circuit before processing the control)
 	if (check_control(PADLOCK_UP) && !Slew_locked) {

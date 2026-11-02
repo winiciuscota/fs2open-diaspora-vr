@@ -106,6 +106,8 @@ void gr_string_outlined(int x, int y, const char* text, const color* foreground,
  * @param y2 The end y-coordinate
  * @param resize_mode The resize mode for translating screen positions
  */
+// object type of the HUD gauge being drawn, for VR debugging (-1 = none)
+extern int Gr_debug_hud_gauge;
 void gr_line(int x1, int y1, int x2, int y2, int resize_mode = GR_RESIZE_FULL);
 /**
  * @brief Draws an antialiased line is the current color is an alphacolor, otherwise just draws a fast line.

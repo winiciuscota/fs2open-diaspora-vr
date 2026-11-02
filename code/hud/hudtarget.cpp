@@ -27,6 +27,7 @@
 #include "hud/hudreticle.h"
 #include "hud/hudshield.h"
 #include "hud/hudtarget.h"
+#include "graphics/openxr.h"
 #include "hud/hudtargetbox.h"
 #include "iff_defs/iff_defs.h"
 #include "io/timer.h"
@@ -2486,6 +2487,12 @@ int object_targetable_in_reticle(object *target_objp)
 
 void hud_target_in_reticle_new()
 {
+	// VR: look-to-target - aim along the head's gaze instead of the ship's nose (FSO_VR_GAZE_TARGET=0 turns it off)
+	static const bool vr_gaze_target = !(getenv("FSO_VR_GAZE_TARGET") && atoi(getenv("FSO_VR_GAZE_TARGET")) == 0);
+	const bool use_gaze = vr_gaze_target && openxr_enabled() && Openxr_gaze_valid;
+	const vec3d& ray_origin = use_gaze ? Openxr_gaze_pos : Eye_position;
+	const vec3d& ray_dir = use_gaze ? Openxr_gaze_dir : Player_obj->orient.vec.fvec;
+
 	vec3d	terminus;
 	object	*A;
 	mc_info	mc;
@@ -2495,7 +2502,7 @@ void hud_target_in_reticle_new()
 	Reticle_save_timestamp = timestamp(RESET_TARGET_IN_RETICLE);
 
 	//	Get 3d vector through center of reticle
-	vm_vec_scale_add(&terminus, &Eye_position, &Player_obj->orient.vec.fvec, TARGET_IN_RETICLE_DISTANCE);
+	vm_vec_scale_add(&terminus, &ray_origin, &ray_dir, TARGET_IN_RETICLE_DISTANCE);
 
 	mc.model_instance_num = -1;
 	mc.model_num = 0;
@@ -2559,9 +2566,9 @@ void hud_target_in_reticle_new()
 			// so just check distance of a point
 			vec3d temp_v;
 			float angle;
-			vm_vec_sub(&temp_v, &A->pos, &Eye_position);
+			vm_vec_sub(&temp_v, &A->pos, &ray_origin);
 			vm_vec_normalize(&temp_v);
-			angle = vm_vec_dot(&Player_obj->orient.vec.fvec, &temp_v);
+			angle = vm_vec_dot(&ray_dir, &temp_v);
 			if (angle > 0.99f) {
 				dist = vm_vec_mag_squared(&temp_v);
 				hud_reticle_list_update(A, dist, 0);
@@ -2570,13 +2577,13 @@ void hud_target_in_reticle_new()
 		} else {
 			mc.orient = &A->orient;										// The object's orient
 			mc.pos = &A->pos;												// The object's position
-			mc.p0 = &Eye_position;										// Point 1 of ray to check
+			mc.p0 = &ray_origin;										// Point 1 of ray to check
 			mc.p1 = &terminus;											// Point 2 of ray to check
 			mc.flags = MC_CHECK_MODEL;	// | MC_ONLY_BOUND_BOX;		// check the model, but only its bounding box
 
 			model_collide(&mc);
 			if ( mc.num_hits ) {
-				dist = vm_vec_dist_squared(&mc.hit_point_world, &Eye_position);
+				dist = vm_vec_dist_squared(&mc.hit_point_world, &ray_origin);
 				hud_reticle_list_update(A, dist, 0);
 			}
 		}
@@ -2601,6 +2608,12 @@ void hud_target_in_reticle_new()
 
 void hud_target_in_reticle_old()
 {
+	// VR: look-to-target - aim along the head's gaze instead of the ship's nose (FSO_VR_GAZE_TARGET=0 turns it off)
+	static const bool vr_gaze_target = !(getenv("FSO_VR_GAZE_TARGET") && atoi(getenv("FSO_VR_GAZE_TARGET")) == 0);
+	const bool use_gaze = vr_gaze_target && openxr_enabled() && Openxr_gaze_valid;
+	const vec3d& ray_origin = use_gaze ? Openxr_gaze_pos : Eye_position;
+	const vec3d& ray_dir = use_gaze ? Openxr_gaze_dir : Player_obj->orient.vec.fvec;
+
 	object	*A, *target_obj;
 	float	dot;
 	vec3d	vec_to_target;
@@ -2632,12 +2645,12 @@ void hud_target_in_reticle_old()
 			continue;
 		}
 
-		if ( vm_vec_same( &A->pos, &Eye_position ) ) {
+		if ( vm_vec_same( &A->pos, &ray_origin ) ) {
 			continue;
 		}
 
-		vm_vec_normalized_dir(&vec_to_target, &A->pos, &Eye_position);
-		dot = vm_vec_dot(&Player_obj->orient.vec.fvec, &vec_to_target);
+		vm_vec_normalized_dir(&vec_to_target, &A->pos, &ray_origin);
+		dot = vm_vec_dot(&ray_dir, &vec_to_target);
 
 		if ( dot > MIN_DOT_FOR_TARGET ) {
 			hud_reticle_list_update(A, dot, 1);

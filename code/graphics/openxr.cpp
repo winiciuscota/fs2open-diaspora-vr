@@ -405,6 +405,8 @@ static Sint16 openxr_axis16(float v) {
 // engine paints its own cursor at the mouse position, so the right controller's aim ray is turned into mouse input.
 bool (*Openxr_hud_layer_begin_fn)() = nullptr;
 void (*Openxr_hud_layer_end_fn)() = nullptr;
+bool Openxr_gaze_valid = false;
+vec3d Openxr_gaze_pos = ZERO_VECTOR, Openxr_gaze_dir = ZERO_VECTOR;
 
 bool openxr_hud_layer_begin() {
 	return openxr_enabled() && Openxr_hud_layer_begin_fn != nullptr && Openxr_hud_layer_begin_fn();
@@ -431,6 +433,11 @@ float openxr_hud_half_fov() {
 	const float v = 0.25f * (xr_views[0].fov.angleUp - xr_views[0].fov.angleDown + xr_views[1].fov.angleUp - xr_views[1].fov.angleDown);
 	const float aspect = i2fl(gr_screen.max_w) / i2fl(gr_screen.max_h);
 	return atanf(tanf(std::max(h, v)) * zoom / aspect);
+}
+
+float openxr_menu_scale() {
+	static const float scale = openxr_hud_env("FSO_VR_MENU_SCALE", 1.35f);
+	return scale;
 }
 
 // far enough that head movement barely shifts the reticle against distant targets (FSO_VR_HUD_DISTANCE overrides)
@@ -478,9 +485,10 @@ static void openxr_update_pointer(bool trigger, bool squeeze) {
 	const float t = (4.0f - oz) / dz;
 	const float hx = ox + t * dx, hy = oy + t * dy;
 
-	const float halfw = 2.0f * gr_screen.clip_aspect;
+	const float halfh = 2.0f * openxr_menu_scale();
+	const float halfw = halfh * gr_screen.clip_aspect;
 	const float u = (hx / halfw + 1.0f) * 0.5f;
-	const float v = (1.0f - hy / 2.0f) * 0.5f;	// 0 = top of the screen
+	const float v = (1.0f - hy / halfh) * 0.5f;	// 0 = top of the screen
 	if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f)
 		return;
 
@@ -494,7 +502,7 @@ static void openxr_update_pointer(bool trigger, bool squeeze) {
 		const float sx = ox + s0 * dx, sy = oy + s0 * dy, sz = oz + s0 * dz;
 		const float k = 4.0f / sz;
 		xr_pointer_hand_u = (sx * k / halfw + 1.0f) * 0.5f;
-		xr_pointer_hand_v = (1.0f - sy * k / 2.0f) * 0.5f;
+		xr_pointer_hand_v = (1.0f - sy * k / halfh) * 0.5f;
 		xr_pointer_hand_valid = true;
 	}
 
@@ -1006,6 +1014,8 @@ bool openxr_get_pointer_hand(float* /*u*/, float* /*v*/) { return false; }
 
 bool (*Openxr_hud_layer_begin_fn)() = nullptr;
 void (*Openxr_hud_layer_end_fn)() = nullptr;
+bool Openxr_gaze_valid = false;
+vec3d Openxr_gaze_pos = ZERO_VECTOR, Openxr_gaze_dir = ZERO_VECTOR;
 
 bool openxr_hud_layer_begin() { return false; }
 
@@ -1014,5 +1024,7 @@ void openxr_hud_layer_end() {}
 float openxr_hud_half_fov() { return 0.0f; }
 
 float openxr_hud_distance() { return 0.0f; }
+
+float openxr_menu_scale() { return 1.0f; }
 
 #endif

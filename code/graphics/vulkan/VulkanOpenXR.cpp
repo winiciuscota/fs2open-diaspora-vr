@@ -452,7 +452,7 @@ void end_frame(VulkanRenderer* renderer, bool stereo)
 			0
 		};
 		quadLayer.pose = XrPosef{ XrQuaternionf{ 0, 0, 0, 1 }, XrVector3f{ 0, 0, -4.0f } };
-		quadLayer.size = XrExtent2Df{ 4.0f * gr_screen.clip_aspect, 4.0f };
+		quadLayer.size = XrExtent2Df{ 4.0f * openxr_menu_scale() * gr_screen.clip_aspect, 4.0f * openxr_menu_scale() };
 
 		pLayer = (const XrCompositionLayerBaseHeader*)&quadLayer;
 	}

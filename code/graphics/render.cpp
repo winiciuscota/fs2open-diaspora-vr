@@ -1,5 +1,7 @@
 
 #include "graphics/render.h"
+#include "graphics/openxr.h"
+#include "io/timer.h"
 
 #include "graphics/material.h"
 #include "graphics/matrix.h"
@@ -49,6 +51,15 @@ static void gr_flash_internal(int r, int g, int b, int a, bool alpha_flash)
 void gr_flash(int r, int g, int b) {
 	if (gr_screen.mode == GraphicsAPI::Stub) {
 		return;
+	}
+
+	// VR: full-view white/colour flashes (explosions, hits, the explosion script's blinding flash) are far harsher in a
+	// headset; scale them (FSO_VR_FLASH, 0..1, default 0.35)
+	if (openxr_enabled()) {
+		static const float vr_flash = getenv("FSO_VR_FLASH") ? static_cast<float>(atof(getenv("FSO_VR_FLASH"))) : 0.35f;
+		r = fl2i(i2fl(r) * vr_flash);
+		g = fl2i(i2fl(g) * vr_flash);
+		b = fl2i(i2fl(b) * vr_flash);
 	}
 
 	if (!(r || g || b)) {
@@ -999,7 +1010,19 @@ static void gr_line(float x1, float y1, float x2, float y2, int resize_mode) {
 	endDrawing(path);
 }
 
+// VR debugging: the HUD gauge being drawn (object type, -1 = none) and a log of lines that start at the canvas origin,
+// which show up as streaks across the VR HUD layer
+int Gr_debug_hud_gauge = -1;
+
 void gr_line(int x1, int y1, int x2, int y2, int resize_mode) {
+	if (openxr_enabled() && Gr_debug_hud_gauge >= 0 && ((abs(x1) <= 2 && abs(y1) <= 2) || (abs(x2) <= 2 && abs(y2) <= 2))) {
+		static int log_stamp = 0;
+		if (timer_get_milliseconds() - log_stamp > 3000) {
+			log_stamp = timer_get_milliseconds();
+			mprintf(("VRHUD origin line: gauge type %d draws (%d,%d)-(%d,%d)\n", Gr_debug_hud_gauge, x1, y1, x2, y2));
+		}
+	}
+
 	if (gr_screen.mode == GraphicsAPI::Stub) {
 		return;
 	}

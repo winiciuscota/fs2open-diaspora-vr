@@ -329,9 +329,11 @@ void VulkanRenderer::createRenderPass()
 	depthAttachment.format = m_depthFormat;
 	depthAttachment.samples = vk::SampleCountFlagBits::e1;
 	depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
-	depthAttachment.storeOp = vk::AttachmentStoreOp::eDontCare;
+	// stored, so a pass that is ended and resumed mid-frame (m_renderPassLoad) keeps depth and stencil: the HUD
+	// hardpoints gauge writes the ship silhouette into the stencil and reads it back for the outline pass
+	depthAttachment.storeOp = vk::AttachmentStoreOp::eStore;
 	depthAttachment.stencilLoadOp = vk::AttachmentLoadOp::eClear;
-	depthAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+	depthAttachment.stencilStoreOp = vk::AttachmentStoreOp::eStore;
 	depthAttachment.initialLayout = vk::ImageLayout::eUndefined;
 	depthAttachment.finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
@@ -408,7 +410,11 @@ void VulkanRenderer::createRenderPass()
 	// eDepthStencilAttachmentOptimal (not eUndefined) so no cross-frame layout
 	// transition write occurs here -- the depth WAW is handled by the shared
 	// dependency's eDepthStencilAttachmentWrite srcAccessMask above.
-	depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+	// Diaspora port: depth AND stencil are kept on resume (eLoad). Clearing them broke stencil-based HUD drawing that
+	// spans a pass restart (hardpoints ship outline: silhouette written to the stencil, outline masked by it), which
+	// OpenGL never clears mid-frame. The composition pass still starts each frame cleared (m_renderPass).
+	depthAttachment.loadOp = vk::AttachmentLoadOp::eLoad;
+	depthAttachment.stencilLoadOp = vk::AttachmentLoadOp::eLoad;
 	depthAttachment.initialLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
 	attachments = {colorAttachment, depthAttachment};

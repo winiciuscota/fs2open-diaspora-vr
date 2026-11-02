@@ -3620,13 +3620,19 @@ void game_render_frame( camid cid, const vec3d* offset, const matrix* rot_offset
 			eye_orient = *rot_offset * eye_orient;
 		}
 
+		// VR: no camera shake (hits, afterburner, explosions) unless FSO_VR_SHAKE=1 - a shaking view in a headset is a
+		// classic nausea trigger
+		static const bool vr_shake = getenv("FSO_VR_SHAKE") != nullptr && atoi(getenv("FSO_VR_SHAKE")) != 0;
+		const bool shake = !openxr_enabled() || vr_shake;
+
 		//Handle jitter if not cutscene camera
 		if( !(Viewer_mode & VM_FREECAMERA) ) {
-			apply_view_shake(&eye_orient);
+			if (shake)
+				apply_view_shake(&eye_orient);
 			cam->set_rotation(&eye_orient);		// this was added in 57fbb21c; see Mantis 1743; needed to make the target indicator shake
 		}
 		//If cutscene camera, handle jitter differently
-		else if ( Game_shudder_everywhere ) {
+		else if ( Game_shudder_everywhere && shake ) {
 			apply_view_shake(&eye_orient);		// the camera rotation shouldn't be modified for cutscenes or it will produce feedback
 		}
 
@@ -4448,6 +4454,21 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 
 	if (restore_cam) {
 		hud_cam->set_rotation(&ship_cam_orient);
+	}
+
+	// head gaze for VR look-to-target (Target Ship in Reticle)
+	if (openxr_enabled() && hud_cam != nullptr && rot_offset != nullptr) {
+		vec3d cam_pos;
+		matrix cam_orient;
+		hud_cam->get_info(&cam_pos, &cam_orient);
+		vec3d eye_offset = ZERO_VECTOR;
+		if (offset != nullptr) {
+			vm_vec_unrotate(&eye_offset, offset, &cam_orient);
+		}
+		const matrix eye_orient = *rot_offset * cam_orient;
+		Openxr_gaze_pos = cam_pos + eye_offset;
+		Openxr_gaze_dir = eye_orient.vec.fvec;
+		Openxr_gaze_valid = true;
 	}
 
 	//Cutscene bars

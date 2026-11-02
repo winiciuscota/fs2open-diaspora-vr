@@ -353,6 +353,22 @@ void VulkanRenderer::endSceneRendering()
 	pass.viewport = PassViewport::NoFlip;
 	beginTrackedRenderPass(pass);
 
+	// m_renderPassLoad now keeps depth/stencil across resumes; the HUD part of the frame starts from clean ones
+	{
+		vk::ClearAttachment clearDepth;
+		clearDepth.aspectMask = vk::ImageAspectFlagBits::eDepth;
+		if (m_depthFormat == vk::Format::eD32SfloatS8Uint || m_depthFormat == vk::Format::eD24UnormS8Uint ||
+			m_depthFormat == vk::Format::eD16UnormS8Uint) {
+			clearDepth.aspectMask |= vk::ImageAspectFlagBits::eStencil;
+		}
+		clearDepth.clearValue.depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+		vk::ClearRect clearRect;
+		clearRect.rect = vk::Rect2D(vk::Offset2D(0, 0), m_renderExtent);
+		clearRect.baseArrayLayer = 0;
+		clearRect.layerCount = 1;
+		m_currentCommandBuffer.clearAttachments(1, &clearDepth, 1, &clearRect);
+	}
+
 	// Blit the HDR scene to swap chain through post-processing
 	m_postProcessor->blitToSwapChain(m_currentCommandBuffer);
 
