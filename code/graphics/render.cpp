@@ -1030,6 +1030,14 @@ void gr_debug_vr_hud_probe(const char* what)
 }
 
 void gr_line(int x1, int y1, int x2, int y2, int resize_mode) {
+	if (openxr_enabled() && Gr_debug_hud_gauge >= 0 && (abs(x2 - x1) > gr_screen.max_w * 2 / 5 || abs(y2 - y1) > gr_screen.max_h * 2 / 5)) {
+		static int long_stamp[1024] = {};
+		const int slot = Gr_debug_hud_gauge & 1023;
+		if (timer_get_milliseconds() - long_stamp[slot] > 4000) {
+			long_stamp[slot] = timer_get_milliseconds();
+			mprintf(("VRHUD long line: gauge type %d draws (%d,%d)-(%d,%d) on a %dx%d canvas\n", Gr_debug_hud_gauge, x1, y1, x2, y2, gr_screen.max_w, gr_screen.max_h));
+		}
+	}
 	if (openxr_enabled() && Gr_debug_hud_gauge >= 0 && ((abs(x1) <= 2 && abs(y1) <= 2) || (abs(x2) <= 2 && abs(y2) <= 2))) {
 		static int log_stamp = 0;
 		if (timer_get_milliseconds() - log_stamp > 3000) {

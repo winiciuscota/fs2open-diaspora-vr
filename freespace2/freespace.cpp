@@ -4416,14 +4416,17 @@ static void game_render_vr_hud_layer()
 	}
 	HUD_reset_clip();
 
+	Gr_debug_hud_gauge = 901;
 	if ((Game_detail_flags & DETAIL_FLAG_HUD) && (!(Game_mode & GM_MULTIPLAYER) || ((Game_mode & GM_MULTIPLAYER) && !(Net_player->flags & NETINFO_FLAG_OBSERVER)))) {
 		anim_render_all(0, flFrametime);
 	}
 
+	Gr_debug_hud_gauge = 900;
 	if (!(Viewer_mode & (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY)) && scripting::hooks::OnHudDraw->isActive()) {
 		g3_set_fov(hud_fov);
 		scripting::hooks::OnHudDraw->run(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, std::move(scripting_param_list));
 	}
+	Gr_debug_hud_gauge = -1;
 
 	gr_reset_clip();
 	Game_vr_hud_layer_pass = false;
