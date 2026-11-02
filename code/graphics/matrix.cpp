@@ -269,6 +269,18 @@ void gr_set_world_hud(const matrix4& eye_view, const matrix4& eye_proj, const ma
 	Gr_world_hud_active = true;
 }
 
+// the 2D matrix state copied the model matrix when the HUD started, so a changed one has to be pushed again
+static void gr_world_hud_apply_model()
+{
+	if (!htl_2d_matrix_set)
+		return;
+
+	gr_model_matrix_stack.pop();
+	gr_model_matrix_stack.push_and_replace(Gr_world_hud_model);
+	vm_matrix4_x_matrix4(&gr_model_view_matrix, &gr_view_matrix, &Gr_world_hud_model);
+	matrix_uniform_up_to_date = false;
+}
+
 void gr_world_hud_shift(float dx, float dy)
 {
 	matrix4 t;
@@ -276,11 +288,13 @@ void gr_world_hud_shift(float dx, float dy)
 	t.a2d[3][0] = dx;
 	t.a2d[3][1] = dy;
 	vm_matrix4_x_matrix4(&Gr_world_hud_model, &Gr_world_hud_model_base, &t);
+	gr_world_hud_apply_model();
 }
 
 void gr_world_hud_unshift()
 {
 	Gr_world_hud_model = Gr_world_hud_model_base;
+	gr_world_hud_apply_model();
 }
 
 void gr_clear_world_hud()
