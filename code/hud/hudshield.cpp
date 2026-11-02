@@ -712,7 +712,7 @@ void HudGaugeShield::showShields(const object *objp, ShieldGaugeType mode, bool 
 			render_info.set_detail_level_lock(1);
 			render_info.set_object_number(OBJ_INDEX(objp));
 
-			model_render_immediate( &render_info, sip->model_num, model_instance_number, &object_orient, &vmd_zero_vector );
+			if (!Gr_world_hud_active) model_render_immediate( &render_info, sip->model_num, model_instance_number, &object_orient, &vmd_zero_vector );
 		}
 
 		//We're done
