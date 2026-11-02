@@ -2145,8 +2145,27 @@ bool hud_gauge_is_world_aligned(int gauge_object)
 	}
 }
 
+// VR debugging: FSO_VR_HUD_SKIP="23,53" hides gauges of those object types in VR (find which one draws an artifact)
+static bool hud_gauge_vr_skipped(int gauge_object)
+{
+	static const SCP_vector<int> skip = []() {
+		SCP_vector<int> v;
+		if (const char* e = getenv("FSO_VR_HUD_SKIP")) {
+			for (const char* p = e; *p; ) {
+				v.push_back(atoi(p));
+				while (*p && *p != ',') p++;
+				if (*p == ',') p++;
+			}
+		}
+		return v;
+	}();
+	return openxr_enabled() && std::find(skip.begin(), skip.end(), gauge_object) != skip.end();
+}
+
 static bool hud_gauge_in_vr_pass(const HudGauge* gauge)
 {
+	if (hud_gauge_vr_skipped(gauge->getObjectType()))
+		return false;
 	if (Hud_vr_pass == 0)
 		return true;
 	return hud_gauge_is_world_aligned(gauge->getObjectType()) == (Hud_vr_pass == 1);

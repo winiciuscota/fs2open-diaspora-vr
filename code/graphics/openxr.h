@@ -46,6 +46,9 @@ void openxr_poll();
  */
 void openxr_start_mission();
 
+// re-centre the play space on the head (position + heading) at the next frame
+void openxr_request_recenter();
+
 /**
  * @brief Polls whether OpenXR is active and can render
  */

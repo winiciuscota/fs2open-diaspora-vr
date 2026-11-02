@@ -857,9 +857,12 @@ static void game_flash_draw()
 		b = fl2i( Game_flash_blue*128.0f );  
 
 		if ( Sun_spot > 0.0f && gr_sunglare_enabled() && !gr_lightshafts_enabled()) {
-			r += fl2i(Sun_spot*128.0f);
-			g += fl2i(Sun_spot*128.0f);
-			b += fl2i(Sun_spot*128.0f);
+			// VR: looking at the sun washes the whole headset view out; keep a hint of it (FSO_VR_SUNGLARE, default 0.3)
+			static const float vr_sunglare = getenv("FSO_VR_SUNGLARE") ? static_cast<float>(atof(getenv("FSO_VR_SUNGLARE"))) : 0.3f;
+			const float glare = Sun_spot * (openxr_enabled() ? vr_sunglare : 1.0f);
+			r += fl2i(glare*128.0f);
+			g += fl2i(glare*128.0f);
+			b += fl2i(glare*128.0f);
 		}
 
 		if ( Big_expl_flash.cur_flash_intensity  > 0.0f ) {

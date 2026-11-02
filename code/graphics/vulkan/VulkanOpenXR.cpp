@@ -649,6 +649,8 @@ bool vulkan_openxr_flip()
 
 		if (was_multiframe) {
 			openxr_reset_offset();
+			// back in the menus: put the screen straight ahead again
+			openxr_request_recenter();
 			was_multiframe = false;
 		}
 
