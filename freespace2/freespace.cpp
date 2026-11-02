@@ -35,6 +35,7 @@
 
 #include "SDLGraphicsOperations.h"
 #include "freespace.h"
+#include <functional>
 #include "freespaceresource.h"
 #include "levelpaging.h"
 
@@ -42,6 +43,8 @@
 #include "asteroid/asteroid.h"
 #include "autopilot/autopilot.h"
 #include "bmpman/bmpman.h"
+#include "graphics/grinternal.h"
+#include "graphics/material.h"
 #include "camera/photomode.h"
 #include "cfile/cfile.h"
 #include "cheats_table/cheats_table.h"
@@ -4204,6 +4207,94 @@ void game_render_post_frame()
 #define DEBUG_TIMER_CALL
 #endif
 
+// ---- VR: world-fixed HUD ---------------------------------------------------------------------------------------
+// The stock VR path draws the HUD in 2D screen space and slides it around by the head/nose angle, which looks like a
+// flat sheet glued in front of the face. Instead the HUD (gauges, animations and script overlays) is drawn once per
+// frame into a texture through the ship's own, non-head-tracked camera, and every eye then sees that texture as a quad
+// fixed to the cockpit, a fixed distance ahead, so you can look around it.
+// FSO_VR_HUD_HEAD=1 restores the stock head-locked drawing.
+static int Vr_hud_target = -1;
+static bool Vr_hud_dirty = true;			// set once per VR frame, before the first eye
+static bool Vr_hud_target_failed = false;
+constexpr int VR_HUD_TEX_W = 2048;
+constexpr int VR_HUD_TEX_H = 1536;			// 4:3, the HUD's native layout
+constexpr float VR_HUD_ZOOM = 0.75f;		// camera zoom used for the HUD texture (horizontal fov = zoom * PROJ_FOV_FACTOR)
+constexpr float VR_HUD_DISTANCE = 14.0f;	// metres ahead of the cockpit eye point
+
+static bool vr_world_hud_active()
+{
+	static const bool head_locked = getenv("FSO_VR_HUD_HEAD") != nullptr;
+	return !head_locked && !Vr_hud_target_failed && openxr_enabled();
+}
+
+// Draws the HUD layers into the HUD texture. Returns false (and draws nothing) when the target is not available.
+static bool vr_render_hud_texture(const std::function<void(const fov_t*)>& draw_layers)
+{
+	if (Vr_hud_target < 0) {
+		Vr_hud_target = bm_make_render_target(VR_HUD_TEX_W, VR_HUD_TEX_H, BMP_FLAG_RENDER_TARGET_DYNAMIC);
+	}
+	if (Vr_hud_target < 0 || !bm_set_render_target(Vr_hud_target)) {
+		mprintf(("VR: could not create the HUD render target, falling back to the head-locked HUD\n"));
+		Vr_hud_target_failed = true;
+		return false;
+	}
+
+	gr_reset_clip();
+	gr_set_clear_color(0, 0, 0);
+	gr_clear();
+
+	const fov_t hud_zoom = VR_HUD_ZOOM;
+	draw_layers(&hud_zoom);
+
+	bm_set_render_target(-1);
+	return true;
+}
+
+// Shows the HUD texture as a cockpit-fixed quad in the view of the current eye.
+static void vr_draw_hud_quad(camid cid, const vec3d* offset, const matrix* rot_offset, const fov_t* fov_override)
+{
+	camera* cam = cid.getCamera();
+	if (cam == nullptr || Vr_hud_target < 0)
+		return;
+
+	vec3d cam_pos, eye_pos;
+	matrix cam_orient, eye_orient;
+	cam->get_info(&cam_pos, &cam_orient);
+
+	// same eye placement as game_render_frame()
+	eye_pos = cam_pos;
+	eye_orient = cam_orient;
+	if (offset != nullptr) {
+		vec3d offset_local;
+		vm_vec_unrotate(&offset_local, offset, &cam_orient);
+		eye_pos += offset_local;
+	}
+	if (rot_offset != nullptr) {
+		eye_orient = *rot_offset * cam_orient;
+	}
+
+	// the quad: facing the pilot, fixed to the cockpit, sized so it spans exactly the fov the texture was drawn with
+	const float half_w = VR_HUD_DISTANCE * tanf(VR_HUD_ZOOM * PROJ_FOV_FACTOR * 0.5f);
+	const float half_h = half_w * (static_cast<float>(VR_HUD_TEX_H) / static_cast<float>(VR_HUD_TEX_W));
+
+	vec3d hud_pos;
+	vm_vec_scale_add(&hud_pos, &cam_pos, &cam_orient.vec.fvec, VR_HUD_DISTANCE);
+
+	matrix quad_orient = cam_orient;
+	vm_vec_negate(&quad_orient.vec.fvec);
+	vm_vec_negate(&quad_orient.vec.rvec);
+
+	g3_start_frame(0);
+	g3_set_view_matrix(&eye_pos, &eye_orient, fov_override ? *fov_override : cam->get_fov());
+
+	material mat;
+	material_set_unlit(&mat, Vr_hud_target, 1.0f, true, false);
+	mat.set_blend_mode(ALPHA_BLEND_ADDITIVE);	// the HUD is light on black
+	g3_render_rect_oriented(&mat, &hud_pos, &quad_orient, half_w, half_h);
+
+	g3_end_frame();
+}
+
 void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const matrix* rot_offset = nullptr, const fov_t* fov_override = nullptr) {
 	// clear the screen to black
 	gr_reset_clip();
@@ -4236,29 +4327,46 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 		Scripting_didnt_draw_hud = scripting::hooks::OnHudDraw->isOverride(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, scripting_param_list) ? 0 : 1;
 	}
 
-	if (Scripting_didnt_draw_hud) {
-		GR_DEBUG_SCOPE("Render HUD");
-		TRACE_SCOPE(tracing::RenderHUD);
+	// everything that makes up the HUD in one go, so it can be drawn either on screen or into the VR HUD texture
+	auto draw_hud_layers = [&](const fov_t* hud_fov) {
+		if (Scripting_didnt_draw_hud) {
+			GR_DEBUG_SCOPE("Render HUD");
+			TRACE_SCOPE(tracing::RenderHUD);
 
-		game_render_hud(cid, fov_override);
-	}
-	HUD_reset_clip();
-
-	if ((Game_detail_flags & DETAIL_FLAG_HUD) && (!(Game_mode & GM_MULTIPLAYER) || ((Game_mode & GM_MULTIPLAYER) && !(Net_player->flags & NETINFO_FLAG_OBSERVER)))) {
-		anim_render_all(0, flFrametime);
-	}
-
-	if (!(Viewer_mode & (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY)))
-	{
-		TRACE_SCOPE(tracing::RenderHUDHook);
-
-		// see also hu.isOnHudDrawCalled()
-		if (scripting::hooks::OnHudDraw->isActive()) {
-			if (fov_override)
-				g3_set_fov(*fov_override);
-
-			scripting::hooks::OnHudDraw->run(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, std::move(scripting_param_list));
+			game_render_hud(cid, hud_fov);
 		}
+		HUD_reset_clip();
+
+		if ((Game_detail_flags & DETAIL_FLAG_HUD) && (!(Game_mode & GM_MULTIPLAYER) || ((Game_mode & GM_MULTIPLAYER) && !(Net_player->flags & NETINFO_FLAG_OBSERVER)))) {
+			anim_render_all(0, flFrametime);
+		}
+
+		if (!(Viewer_mode & (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY)))
+		{
+			TRACE_SCOPE(tracing::RenderHUDHook);
+
+			// see also hu.isOnHudDrawCalled()
+			if (scripting::hooks::OnHudDraw->isActive()) {
+				if (hud_fov)
+					g3_set_fov(*hud_fov);
+
+				scripting::hooks::OnHudDraw->run(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, std::move(scripting_param_list));
+			}
+		}
+	};
+
+	if (vr_world_hud_active() && cid.isValid()) {
+		if (Vr_hud_dirty) {
+			Vr_hud_dirty = false;
+			if (!vr_render_hud_texture(draw_hud_layers)) {
+				draw_hud_layers(fov_override);
+			}
+		}
+		if (!Vr_hud_target_failed) {
+			vr_draw_hud_quad(cid, offset, rot_offset, fov_override);
+		}
+	} else {
+		draw_hud_layers(fov_override);
 	}
 
 	// check to see if we should display the death died popup
@@ -4423,6 +4531,7 @@ void game_frame(bool paused)
 				SCP_vector<light> Lights_copy = Lights, Static_light_copy = Static_light;
 
 				const auto& pose = openxr_start_stereo_frame();
+				Vr_hud_dirty = true;
 
 				util::Random::seed(random);
 				game_do_full_frame(DEBUG_TIMER_CALL &pose.eyes[0].offset, &pose.eyes[0].orientation, &pose.eyes[0].zoom);
