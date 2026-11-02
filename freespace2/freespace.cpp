@@ -4353,7 +4353,22 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 
 	camid cid = game_render_frame_setup();
 
+	// game_render_frame() leaves the head rotation (and view shake) in the camera via set_rotation(). The world-fixed
+	// VR HUD (plane placement and gauge slew) has to be computed from the ship's own camera, otherwise it turns with
+	// the head, so remember it and put it back.
+	camera* hud_cam = cid.getCamera();
+	matrix ship_cam_orient = vmd_identity_matrix;
+	const bool restore_cam = (hud_cam != nullptr) && vr_world_hud_active();
+	if (restore_cam) {
+		vec3d ship_cam_pos;
+		hud_cam->get_info(&ship_cam_pos, &ship_cam_orient);
+	}
+
 	game_render_frame(cid, offset, rot_offset, fov_override);
+
+	if (restore_cam) {
+		hud_cam->set_rotation(&ship_cam_orient);
+	}
 
 	//Cutscene bars
 	clip_frame_view();
