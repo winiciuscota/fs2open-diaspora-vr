@@ -4212,7 +4212,7 @@ void game_render_post_frame()
 // flat sheet glued in front of the face. Instead the HUD (gauges, animations and script overlays) is drawn once per
 // frame into a texture through the ship's own, non-head-tracked camera, and every eye then sees that texture as a quad
 // fixed to the cockpit, a fixed distance ahead, so you can look around it.
-// FSO_VR_HUD_HEAD=1 restores the stock head-locked drawing.
+// Currently opt-in (FSO_VR_HUD_WORLD=1), see vr_world_hud_active().
 static int Vr_hud_target = -1;
 static bool Vr_hud_dirty = true;			// set once per VR frame, before the first eye
 static bool Vr_hud_target_failed = false;
@@ -4223,8 +4223,10 @@ constexpr float VR_HUD_DISTANCE = 14.0f;	// metres ahead of the cockpit eye poin
 
 static bool vr_world_hud_active()
 {
-	static const bool head_locked = getenv("FSO_VR_HUD_HEAD") != nullptr;
-	return !head_locked && !Vr_hud_target_failed && openxr_enabled();
+	// EXPERIMENTAL and off by default: the gauges switch to their cockpit-display drawing mode while a texture is the
+	// render target, so the HUD comes out empty. FSO_VR_HUD_WORLD=1 enables it for development.
+	static const bool world_hud = getenv("FSO_VR_HUD_WORLD") != nullptr;
+	return world_hud && !Vr_hud_target_failed && openxr_enabled();
 }
 
 // Draws the HUD layers into the HUD texture. Returns false (and draws nothing) when the target is not available.
