@@ -266,14 +266,6 @@ static bool openxr_init_swapchains() {
 	return true;
 }
 
-// The play space (xr_space) is the runtime's LOCAL space re-centred on the player's head: same position, heading only
-// (no pitch/roll). Menus, the HUD layer and the cockpit are placed in it, so they appear straight ahead whichever way
-// the runtime's LOCAL space happened to face. Re-centred on the first frame, at mission start and when the runtime
-// re-centres (Quest/WiVRn "Recenter").
-static XrSpace xr_base_space = XR_NULL_HANDLE;	// LOCAL as the runtime defines it
-static XrSpace xr_view_space = XR_NULL_HANDLE;	// the head
-static bool xr_recenter_pending = true;
-
 static bool openxr_init_space() {
 	XrReferenceSpaceCreateInfo spaceCreateInfo {
 		XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
@@ -282,61 +274,10 @@ static bool openxr_init_space() {
 		XrPosef{ XrQuaternionf{ 0, 0, 0, 1 }, XrVector3f{ 0, 0, 0 } },
 	};
 
-	if (xrCreateReferenceSpace(xr_session, &spaceCreateInfo, &xr_base_space) != XR_SUCCESS) {
+	if (xrCreateReferenceSpace(xr_session, &spaceCreateInfo, &xr_space) != XR_SUCCESS) {
 		return false;
 	}
-	xr_space = xr_base_space;
 
-	spaceCreateInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
-	if (xrCreateReferenceSpace(xr_session, &spaceCreateInfo, &xr_view_space) != XR_SUCCESS) {
-		xr_view_space = XR_NULL_HANDLE;
-	}
-
-	return true;
-}
-
-void openxr_request_recenter() {
-	xr_recenter_pending = true;
-}
-
-// returns true when the play space was re-created around the head
-static bool openxr_do_recenter(XrTime time) {
-	if (xr_view_space == XR_NULL_HANDLE || xr_base_space == XR_NULL_HANDLE)
-		return false;
-
-	XrSpaceLocation loc{ XR_TYPE_SPACE_LOCATION };
-	if (xrLocateSpace(xr_view_space, xr_base_space, time, &loc) != XR_SUCCESS)
-		return false;
-	const XrSpaceLocationFlags need = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
-	if ((loc.locationFlags & need) != need)
-		return false;
-
-	// heading of the head's forward (-Z) vector, as a rotation about +Y
-	const XrQuaternionf& q = loc.pose.orientation;
-	const float fx = -(2.0f * (q.x * q.z + q.w * q.y));
-	const float fz = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));
-	const float yaw = atan2f(-fx, -fz);
-
-	XrReferenceSpaceCreateInfo info {
-		XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
-		nullptr,
-		XR_REFERENCE_SPACE_TYPE_LOCAL,
-		XrPosef{ XrQuaternionf{ 0.0f, sinf(yaw * 0.5f), 0.0f, cosf(yaw * 0.5f) }, loc.pose.position },
-	};
-	XrSpace centred = XR_NULL_HANDLE;
-	if (xrCreateReferenceSpace(xr_session, &info, &centred) != XR_SUCCESS)
-		return false;
-
-	if (xr_space != xr_base_space)
-		if (xr_space != xr_base_space)
-		xrDestroySpace(xr_space);
-	if (xr_base_space != XR_NULL_HANDLE)
-		xrDestroySpace(xr_base_space);
-	if (xr_view_space != XR_NULL_HANDLE)
-		xrDestroySpace(xr_view_space);
-	xr_space = xr_base_space = xr_view_space = XR_NULL_HANDLE;
-	xr_space = centred;
-	mprintf(("OpenXR: play space re-centred on the head (heading %.1f deg)\n", yaw * 180.0f / PI));
 	return true;
 }
 
@@ -883,8 +824,6 @@ void openxr_start_mission() {
 		return;
 
 	openxr_reset_offset();
-	// face the cockpit the way the player is looking now
-	xr_recenter_pending = true;
 
 	if (!static_cast<bool>(Stars_XRBuffer))
 		Stars_XRBuffer = make_unique<star[]>(MAX_STARS);
@@ -917,10 +856,6 @@ void openxr_poll() {
 		case XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING:
 			openxr_initialized = false;
 			openxr_close();
-			break;
-		case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING:
-			// the runtime re-centred its spaces (Quest/WiVRn "Recenter"): rebuild the play space around the head
-			xr_recenter_pending = true;
 			break;
 		case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED:
 		{
@@ -1016,10 +951,6 @@ void openxr_start_frame() {
 		return;
 	}
 
-	const bool recentered = xr_recenter_pending && openxr_do_recenter(xr_state.predictedDisplayTime);
-	if (recentered)
-		xr_recenter_pending = false;
-
 	openxr_update_input();
 
 	XrViewLocateInfo viewLocateInfo {
@@ -1050,10 +981,6 @@ void openxr_start_frame() {
 		xr_views.data()
 	);
 
-	// the head is now at the play space origin: the cockpit eye point follows
-	if (recentered)
-		openxr_reset_offset();
-
 	XrFrameBeginInfo beginFrameInfo{ XR_TYPE_FRAME_BEGIN_INFO, nullptr };
 	xrBeginFrame(xr_session, &beginFrameInfo);
 }
@@ -1076,8 +1003,6 @@ void openxr_close() {}
 void openxr_poll() {}
 
 void openxr_start_mission() {}
-
-void openxr_request_recenter() {}
 
 bool openxr_enabled() { return false; }
 
