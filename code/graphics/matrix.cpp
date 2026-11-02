@@ -257,6 +257,7 @@ void gr_end_view_matrix()
 }
 
 bool Gr_world_hud_active = false;
+float Gr_world_hud_line_scale = 3.0f;
 static matrix4 Gr_world_hud_view, Gr_world_hud_proj, Gr_world_hud_model;
 
 void gr_set_world_hud(const matrix4& eye_view, const matrix4& eye_proj, const matrix4& canvas_to_world)

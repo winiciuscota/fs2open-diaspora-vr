@@ -783,7 +783,7 @@ graphics::paths::PathRenderer* beginDrawing(int resize_mode) {
 
 	path->beginPath();
 
-	path->setStrokeWidth(GR_CURRENT_LINE_WIDTH);
+	path->setStrokeWidth(GR_CURRENT_LINE_WIDTH * (Gr_world_hud_active ? Gr_world_hud_line_scale : 1.0f));
 
 	return path;
 }

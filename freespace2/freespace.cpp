@@ -4227,6 +4227,7 @@ static float vr_hud_env(const char* name, float fallback)
 	return (v != nullptr && atof(v) > 0.0) ? static_cast<float>(atof(v)) : fallback;
 }
 static float vr_hud_zoom() { static const float z = vr_hud_env("FSO_VR_HUD_ZOOM", 0.9f); return z; }
+static float vr_hud_lines() { static const float l = vr_hud_env("FSO_VR_HUD_LINES", 3.0f); return l; }	// stroke width multiplier
 static float vr_hud_distance() { static const float d = vr_hud_env("FSO_VR_HUD_DISTANCE", 14.0f); return d; }	// metres ahead of the cockpit eye point
 
 static bool vr_world_hud_active()
@@ -4288,6 +4289,7 @@ static bool vr_begin_world_hud(camid cid, const vec3d* offset, const matrix* rot
 	canvas_to_plane.a2d[3][1] = half_h;
 	vm_matrix4_x_matrix4(&canvas_to_world, &plane_to_world, &canvas_to_plane);
 
+	Gr_world_hud_line_scale = vr_hud_lines();
 	gr_set_world_hud(eye_view, eye_proj, canvas_to_world);
 	return true;
 }
