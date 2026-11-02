@@ -205,6 +205,18 @@ static char *Campaign_missions[MAX_MISSIONS] = { NULL };
 static char *Campaign_mission_names[MAX_CAMPAIGN_MISSIONS] = { NULL };
 static int Campaign_mission_flags[MAX_MISSIONS];
 static int Simroom_show_all = 0;
+// Diaspora port: mission descriptions shown under the simulator list, by mission filename (no extension case-folded)
+static SCP_unordered_map<SCP_string, SCP_string> Sim_mission_desc;
+
+static SCP_string sim_desc_key(const char* filename)
+{
+	SCP_string key = filename ? filename : "";
+	auto dot = key.rfind('.');
+	if (dot != SCP_string::npos)
+		key.resize(dot);
+	SCP_tolower(key);
+	return key;
+}
 static int Standalone_mission_names_inited = 0;
 static int Campaign_mission_names_inited = 0;
 static int Num_standalone_missions;
@@ -492,6 +504,7 @@ int build_standalone_mission_list_do_frame(bool API_Access)
 
 			if (condition) {
 				Standalone_mission_names[Num_standalone_missions_with_info] = vm_strdup(The_mission.name.c_str());
+				Sim_mission_desc[sim_desc_key(filename.c_str())] = The_mission.mission_desc;
 				Standalone_mission_flags[Num_standalone_missions_with_info] = The_mission.game_type;
 				int y = Num_lines * (font_height + 2);
 
@@ -564,6 +577,7 @@ int build_campaign_mission_list_do_frame(bool API_Access)
 			
 			// add to list
 			Campaign_mission_names[Num_campaign_missions_with_info] = vm_strdup(The_mission.name.c_str());
+			Sim_mission_desc[sim_desc_key(Campaign.missions[Num_campaign_missions_with_info].name)] = The_mission.mission_desc;
 			Campaign_mission_flags[Num_campaign_missions_with_info] = The_mission.game_type;
 			int y = valid_missions_with_info * (font_height + 2);
 
@@ -1408,6 +1422,63 @@ void sim_room_do_frame(float  /*frametime*/)
 		sim_room_blit_icons(line, y);
 
 		line++;
+	}
+
+	// Diaspora port: description of the hovered (or selected) mission in the free space under the list
+	{
+		const int shown = (select_tease_line >= 0 && select_tease_line < Num_lines) ? select_tease_line : Selected_line;
+		if (shown >= 0 && shown < Num_lines && sim_room_lines[shown].filename) {
+			auto it = Sim_mission_desc.find(sim_desc_key(sim_room_lines[shown].filename));
+			if (it != Sim_mission_desc.end() && !it->second.empty()) {
+				const int box_x = list_x1;
+				const int box_w = list_x2 + list_w2 - list_x1;
+				const int max_lines = 9;
+				int last_y = list_y;
+				if (Num_lines > 0) {
+					const int last_visible = std::min(Num_lines - 1, Scroll_offset + LIST_BUTTONS_MAX - 1);
+					last_y = list_y + sim_room_lines[last_visible].y - sim_room_lines[Scroll_offset].y + font_height;
+				}
+				int desc_y = std::max(last_y + font_height * 2, list_y + list_h - (max_lines + 1) * font_height);
+
+				// word wrap
+				SCP_vector<SCP_string> lines;
+				SCP_string current;
+				SCP_string text = it->second;
+				std::replace(text.begin(), text.end(), '\n', ' ');
+				size_t pos = 0;
+				while (pos < text.size()) {
+					size_t next = text.find(' ', pos);
+					SCP_string word = text.substr(pos, next == SCP_string::npos ? SCP_string::npos : next - pos);
+					pos = (next == SCP_string::npos) ? text.size() : next + 1;
+					if (word.empty())
+						continue;
+					SCP_string candidate = current.empty() ? word : current + " " + word;
+					int w = 0;
+					gr_get_string_size(&w, nullptr, candidate.c_str());
+					if (w > box_w && !current.empty()) {
+						lines.push_back(current);
+						current = word;
+					} else {
+						current = candidate;
+					}
+				}
+				if (!current.empty())
+					lines.push_back(current);
+
+				if (desc_y + font_height < list_y + list_h) {
+					gr_set_color_fast(&Color_text_heading);
+					gr_printf_menu(box_x, desc_y, "%s", XSTR("Mission description", -1));
+					gr_set_color_fast(&Color_text_normal);
+					int y_line = desc_y + font_height + font_height / 2;
+					for (size_t n = 0; n < lines.size() && (int)n < max_lines; n++) {
+						if (y_line + font_height > list_y + list_h)
+							break;
+						gr_printf_menu(box_x, y_line, "%s", lines[n].c_str());
+						y_line += font_height;
+					}
+				}
+			}
+		}
 	}
 
 	i = line - Scroll_offset;
