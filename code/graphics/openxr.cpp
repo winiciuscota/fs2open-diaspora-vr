@@ -412,6 +412,7 @@ bool openxr_get_pointer_hand(float* u, float* v) {
 }
 
 static void openxr_update_pointer(bool trigger, bool squeeze) {
+	xr_pointer_hand_valid = false;
 	SDL_Window* window = os::getSDLMainWindow();
 	if (window == nullptr || xr_aim_spaces[1] == XR_NULL_HANDLE || xr_stage != OpenXRFBStage::NONE)
 		return;
@@ -447,13 +448,17 @@ static void openxr_update_pointer(bool trigger, bool squeeze) {
 	if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f)
 		return;
 
-	// the controller itself, projected from the head (the origin of this frame) onto the menu plane: a laser from the
-	// hand to the cursor is the line between the two points in the menu image
-	xr_pointer_hand_valid = false;
-	if (oz > 0.05f) {
-		const float k = 4.0f / oz;
-		xr_pointer_hand_u = (ox * k / halfw + 1.0f) * 0.5f;
-		xr_pointer_hand_v = (1.0f - oy * k / 2.0f) * 0.5f;
+	// where the beam starts as seen from the head (the origin of this frame): the controller itself, or - when it hangs
+	// beside/behind the head plane - the first point of the pointing ray that is 0.3 m ahead of it. Projected onto the
+	// menu plane, the laser from there to the cursor is the line between the two points in the menu image.
+	{
+		float s0 = 0.0f;
+		if (oz < 0.3f)
+			s0 = (0.3f - oz) / dz;
+		const float sx = ox + s0 * dx, sy = oy + s0 * dy, sz = oz + s0 * dz;
+		const float k = 4.0f / sz;
+		xr_pointer_hand_u = (sx * k / halfw + 1.0f) * 0.5f;
+		xr_pointer_hand_v = (1.0f - sy * k / 2.0f) * 0.5f;
 		xr_pointer_hand_valid = true;
 	}
 
