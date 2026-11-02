@@ -40,10 +40,11 @@
 #include "ship/shipfx.h"
 #include "weapon/weapon.h"
 
+#include "graphics/openxr.h"
+#include "io/keycontrol.h"
+
 #ifndef NDEBUG
 #include "io/key.h"
-#include "io/keycontrol.h"
-#include "graphics/openxr.h"
 #endif
 
 
