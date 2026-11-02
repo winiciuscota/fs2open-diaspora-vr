@@ -4213,8 +4213,14 @@ void game_render_post_frame()
 // overlays) is kept, but gr_set_2d_matrix() maps its canvas onto a plane fixed to the cockpit, a fixed distance ahead,
 // and projects it through each eye's own view, so you can look around the HUD.
 // Default in VR; FSO_VR_HUD_HEAD=1 restores the stock head-locked HUD.
-constexpr float VR_HUD_ZOOM = 0.9f; 		// camera zoom of the HUD pass (horizontal fov = zoom * PROJ_FOV_FACTOR)
-constexpr float VR_HUD_DISTANCE = 14.0f;	// metres ahead of the cockpit eye point
+// Both can be tuned without a rebuild: FSO_VR_HUD_ZOOM (bigger = wider/larger HUD, 0.5 .. 1.3) and FSO_VR_HUD_DISTANCE.
+static float vr_hud_env(const char* name, float fallback)
+{
+	const char* v = getenv(name);
+	return (v != nullptr && atof(v) > 0.0) ? static_cast<float>(atof(v)) : fallback;
+}
+static float vr_hud_zoom() { static const float z = vr_hud_env("FSO_VR_HUD_ZOOM", 0.9f); return z; }
+static float vr_hud_distance() { static const float d = vr_hud_env("FSO_VR_HUD_DISTANCE", 14.0f); return d; }	// metres ahead of the cockpit eye point
 
 static bool vr_world_hud_active()
 {
@@ -4260,11 +4266,11 @@ static bool vr_begin_world_hud(camid cid, const vec3d* offset, const matrix* rot
 
 	// the plane: spans exactly the fov the HUD pass is drawn with, VR_HUD_DISTANCE ahead of the cockpit eye point
 	const float W = i2fl(gr_screen.max_w), H = i2fl(gr_screen.max_h);
-	const float half_w = VR_HUD_DISTANCE * tanf(VR_HUD_ZOOM * PROJ_FOV_FACTOR * 0.5f);
+	const float half_w = vr_hud_distance() * tanf(vr_hud_zoom() * PROJ_FOV_FACTOR * 0.5f);
 	const float half_h = half_w * (H / W);
 
 	vec3d hud_pos;
-	vm_vec_scale_add(&hud_pos, &cam_pos, &cam_orient.vec.fvec, VR_HUD_DISTANCE);
+	vm_vec_scale_add(&hud_pos, &cam_pos, &cam_orient.vec.fvec, vr_hud_distance());
 
 	matrix4 plane_to_world, canvas_to_plane, canvas_to_world;
 	vm_matrix4_set_transform(&plane_to_world, &cam_orient, &hud_pos);
@@ -4340,7 +4346,7 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 	};
 
 	if (vr_world_hud_active() && cid.isValid() && vr_begin_world_hud(cid, offset, rot_offset, fov_override)) {
-		const fov_t hud_zoom = VR_HUD_ZOOM;
+		const fov_t hud_zoom = vr_hud_zoom();
 		draw_hud_layers(&hud_zoom);
 		gr_clear_world_hud();
 	} else {
