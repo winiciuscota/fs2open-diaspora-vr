@@ -2074,11 +2074,12 @@ void hud_maybe_display_supernova()
 /**
  * @brief Undertakes main HUD render. 
  */
-// VR world HUD: the gauges in the lower-right corner of the layout (weapon stores, ship icon, ...) land over the cockpit
-// panel in VR. Lift them as a group to just below the right-hand gauges. Offsets are in 1024x768 HUD units
-// (FSO_VR_HUD_STORES_DX/DY, defaults 0/-150); FSO_VR_HUD_STORES_DY=0 keeps them where the table puts them.
-static bool vr_hud_gauge_shifted = false;
-static void vr_hud_shift_gauge_begin(const HudGauge* gauge)
+// VR world HUD: the gauges in the lower-right corner of the layout (weapon stores, ...) land over the cockpit panel in VR.
+// Lift them as a group by moving the gauge position (the 2D draws are batched, so a matrix change would not stick).
+// Offsets are in 1024x768 HUD units (FSO_VR_HUD_STORES_DX/DY, defaults 0/-150); FSO_VR_HUD_STORES_DY=0 leaves them in place.
+static const HudGauge* vr_hud_shifted_gauge = nullptr;
+static int vr_hud_shift_x = 0, vr_hud_shift_y = 0;
+static void vr_hud_shift_gauge_begin(HudGauge* gauge)
 {
 	if (!Gr_world_hud_active)
 		return;
@@ -2086,26 +2087,24 @@ static void vr_hud_shift_gauge_begin(const HudGauge* gauge)
 	int x = 0, y = 0;
 	gauge->getPosition(&x, &y);
 	const int w = gauge->getBaseWidth(), h = gauge->getBaseHeight();
-	if (getenv("FSO_VR_HUD_DEBUG"))
-		mprintf(("VRHUD gauge type=%d pos=%d,%d base=%dx%d max=%dx%d\n", gauge->getObjectType(), x, y, w, h, gr_screen.max_w, gr_screen.max_h));
 	if (w <= 0 || h <= 0 || x < w * 55 / 100 || y < h * 62 / 100)
 		return;
 
 	static const float dx = getenv("FSO_VR_HUD_STORES_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DX"))) : 0.0f;
 	static const float dy = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -150.0f;
-	const float scale = i2fl(gr_screen.max_w) / 1024.0f;
-	gr_world_hud_shift(dx * scale, dy * scale);
-	vr_hud_gauge_shifted = true;
+	vr_hud_shift_x = fl2i(dx * i2fl(w) / 1024.0f);
+	vr_hud_shift_y = fl2i(dy * i2fl(w) / 1024.0f);
+	gauge->shiftPosition(vr_hud_shift_x, vr_hud_shift_y);
+	vr_hud_shifted_gauge = gauge;
 }
 
 static void vr_hud_shift_gauge_end()
 {
-	if (vr_hud_gauge_shifted) {
-		gr_world_hud_unshift();
-		vr_hud_gauge_shifted = false;
+	if (vr_hud_shifted_gauge) {
+		const_cast<HudGauge*>(vr_hud_shifted_gauge)->shiftPosition(-vr_hud_shift_x, -vr_hud_shift_y);
+		vr_hud_shifted_gauge = nullptr;
 	}
 }
-
 
 void hud_render_all(float frametime)
 {
