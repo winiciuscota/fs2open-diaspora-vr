@@ -2076,8 +2076,8 @@ void hud_maybe_display_supernova()
  */
 bool Hud_vr_lift_lower_right = false;
 
-// VR HUD layer: the gauges in the lower-right corner of the layout (ship icon, weapon stores, kills) sit over the
-// cockpit panel in the headset. Lift them as a group to just below the right-hand gauges by moving the gauge position.
+// VR HUD layer: the gauges in the lower corners of the layout (ship icon, weapon stores, kills; target box) sit over the
+// cockpit panel in the headset. Lift them as groups to just below the side gauges by moving the gauge position.
 // Offsets are in 1024x768 HUD units: FSO_VR_HUD_STORES_DX / FSO_VR_HUD_STORES_DY (defaults 0 / -150; DY=0 keeps them).
 static HudGauge* vr_hud_lifted_gauge = nullptr;
 static int vr_hud_lift_x = 0, vr_hud_lift_y = 0;
@@ -2089,11 +2089,19 @@ static void vr_hud_lift_begin(HudGauge* gauge)
 	int x = 0, y = 0;
 	gauge->getPosition(&x, &y);
 	const int w = gauge->getBaseWidth(), h = gauge->getBaseHeight();
-	if (w <= 0 || h <= 0 || x < w * 55 / 100 || y < h * 62 / 100)
+	if (w <= 0 || h <= 0 || y < h * 62 / 100)
+		return;
+	const bool right = x >= w * 55 / 100;
+	const bool left = x < w * 45 / 100;
+	if (!right && !left)
 		return;
 
-	static const float dx = getenv("FSO_VR_HUD_STORES_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DX"))) : 0.0f;
-	static const float dy = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -150.0f;
+	// lower right: ship icon, weapon stores; lower left: target box (FSO_VR_HUD_LEFT_DX/DY, defaults 60 / -150)
+	static const float dx_r = getenv("FSO_VR_HUD_STORES_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DX"))) : 0.0f;
+	static const float dy_r = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -150.0f;
+	static const float dx_l = getenv("FSO_VR_HUD_LEFT_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DX"))) : 60.0f;
+	static const float dy_l = getenv("FSO_VR_HUD_LEFT_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DY"))) : -150.0f;
+	const float dx = right ? dx_r : dx_l, dy = right ? dy_r : dy_l;
 	vr_hud_lift_x = fl2i(dx * i2fl(w) / 1024.0f);
 	vr_hud_lift_y = fl2i(dy * i2fl(w) / 1024.0f);
 	gauge->shiftPosition(vr_hud_lift_x, vr_hud_lift_y);
