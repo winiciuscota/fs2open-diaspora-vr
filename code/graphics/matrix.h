@@ -34,6 +34,9 @@ extern bool Gr_world_hud_active;
 extern float Gr_world_hud_line_scale;	// multiplies 2D stroke widths while the world-fixed HUD is drawn (1px lines shimmer there)
 void gr_set_world_hud(const matrix4& eye_view, const matrix4& eye_proj, const matrix4& canvas_to_world);
 void gr_clear_world_hud();
+// moves what is drawn next on the world HUD plane by (dx, dy) canvas pixels (y down); gr_world_hud_unshift() undoes it
+void gr_world_hud_shift(float dx, float dy);
+void gr_world_hud_unshift();
 // proj * view * canvas_to_world of the active world-fixed HUD (used by the NanoVG vertex shader)
 void gr_get_world_hud_matrix(matrix4* out);
 

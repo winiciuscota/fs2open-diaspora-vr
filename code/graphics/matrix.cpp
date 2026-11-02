@@ -258,14 +258,29 @@ void gr_end_view_matrix()
 
 bool Gr_world_hud_active = false;
 float Gr_world_hud_line_scale = 3.0f;
-static matrix4 Gr_world_hud_view, Gr_world_hud_proj, Gr_world_hud_model;
+static matrix4 Gr_world_hud_view, Gr_world_hud_proj, Gr_world_hud_model, Gr_world_hud_model_base;
 
 void gr_set_world_hud(const matrix4& eye_view, const matrix4& eye_proj, const matrix4& canvas_to_world)
 {
 	Gr_world_hud_view = eye_view;
 	Gr_world_hud_proj = eye_proj;
 	Gr_world_hud_model = canvas_to_world;
+	Gr_world_hud_model_base = canvas_to_world;
 	Gr_world_hud_active = true;
+}
+
+void gr_world_hud_shift(float dx, float dy)
+{
+	matrix4 t;
+	vm_matrix4_set_identity(&t);
+	t.a2d[3][0] = dx;
+	t.a2d[3][1] = dy;
+	vm_matrix4_x_matrix4(&Gr_world_hud_model, &Gr_world_hud_model_base, &t);
+}
+
+void gr_world_hud_unshift()
+{
+	Gr_world_hud_model = Gr_world_hud_model_base;
 }
 
 void gr_clear_world_hud()
