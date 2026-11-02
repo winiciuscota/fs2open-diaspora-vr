@@ -301,7 +301,6 @@ public:
 	int getConfigType() const;
 	int getObjectType() const;
 	void getPosition(int *x, int *y) const;
-	void shiftPosition(int dx, int dy) { position[0] += dx; position[1] += dy; }
 	bool isOffbyDefault() const;
 	bool isActive() const;
 
