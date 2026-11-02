@@ -4047,6 +4047,13 @@ void game_render_hud(camid cid, const fov_t* fov_override = nullptr)
 		if (fov_override)
 			g3_set_fov(*fov_override);
 
+		// The nose offset (view vector vs ship forward, in pixels) was computed for the head-tracked eye view in
+		// game_render_frame(). The world-fixed VR HUD already keeps the HUD pinned to the cockpit, so recompute it for
+		// this centred HUD camera (which looks along the ship's forward axis, i.e. ~0) instead of applying the head
+		// angle a second time.
+		if (Gr_world_hud_active)
+			HUD_set_offsets();
+
 		hud_render_preprocess(frametime);
 
 		g3_end_frame();
