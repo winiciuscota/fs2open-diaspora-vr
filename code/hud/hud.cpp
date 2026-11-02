@@ -2073,6 +2073,40 @@ void hud_maybe_display_supernova()
 /**
  * @brief Undertakes main HUD render. 
  */
+bool Hud_vr_lift_lower_right = false;
+
+// VR HUD layer: the gauges in the lower-right corner of the layout (ship icon, weapon stores, kills) sit over the
+// cockpit panel in the headset. Lift them as a group to just below the right-hand gauges by moving the gauge position.
+// Offsets are in 1024x768 HUD units: FSO_VR_HUD_STORES_DX / FSO_VR_HUD_STORES_DY (defaults 0 / -150; DY=0 keeps them).
+static HudGauge* vr_hud_lifted_gauge = nullptr;
+static int vr_hud_lift_x = 0, vr_hud_lift_y = 0;
+static void vr_hud_lift_begin(HudGauge* gauge)
+{
+	if (!Hud_vr_lift_lower_right)
+		return;
+
+	int x = 0, y = 0;
+	gauge->getPosition(&x, &y);
+	const int w = gauge->getBaseWidth(), h = gauge->getBaseHeight();
+	if (w <= 0 || h <= 0 || x < w * 55 / 100 || y < h * 62 / 100)
+		return;
+
+	static const float dx = getenv("FSO_VR_HUD_STORES_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DX"))) : 0.0f;
+	static const float dy = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -150.0f;
+	vr_hud_lift_x = fl2i(dx * i2fl(w) / 1024.0f);
+	vr_hud_lift_y = fl2i(dy * i2fl(w) / 1024.0f);
+	gauge->shiftPosition(vr_hud_lift_x, vr_hud_lift_y);
+	vr_hud_lifted_gauge = gauge;
+}
+
+static void vr_hud_lift_end()
+{
+	if (vr_hud_lifted_gauge != nullptr) {
+		vr_hud_lifted_gauge->shiftPosition(-vr_hud_lift_x, -vr_hud_lift_y);
+		vr_hud_lifted_gauge = nullptr;
+	}
+}
+
 int Hud_vr_pass = 0;
 
 // gauges whose position is a direction in the world: they have to be drawn on the far HUD plane
@@ -2186,7 +2220,9 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 
 			sip->hud_gauges[j]->resetClip();
 			sip->hud_gauges[j]->setFont();
+			vr_hud_lift_begin(sip->hud_gauges[j].get());
 			sip->hud_gauges[j]->render(frametime);
+			vr_hud_lift_end();
 		}
 	} else {
 		num_gauges = default_hud_gauges.size();
@@ -2210,7 +2246,9 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 
 			default_hud_gauges[j]->resetClip();
 			default_hud_gauges[j]->setFont();
+			vr_hud_lift_begin(default_hud_gauges[j].get());
 			default_hud_gauges[j]->render(frametime);
+			vr_hud_lift_end();
 		}
 	}
 

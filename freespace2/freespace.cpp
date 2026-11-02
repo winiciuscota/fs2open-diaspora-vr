@@ -4401,7 +4401,9 @@ static void game_render_vr_hud_layer()
 
 	if (Scripting_didnt_draw_hud) {
 		GR_DEBUG_SCOPE("Render VR HUD layer");
+		Hud_vr_lift_lower_right = true;
 		game_render_hud(cid, &hud_fov, 0);
+		Hud_vr_lift_lower_right = false;
 	}
 	HUD_reset_clip();
 

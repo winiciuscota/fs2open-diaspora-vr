@@ -129,6 +129,8 @@ void hud_render_all(float frametime);
 // VR world HUD: 0 = every gauge in one pass, 1 = only the gauges that must line up with the world (reticle, brackets,
 // lead indicators ...), 2 = all the other gauges (drawn on a panel inside the cockpit)
 extern int Hud_vr_pass;
+// set while the HUD is drawn onto the VR HUD layer: the lower-right gauge group is lifted off the cockpit panel
+extern bool Hud_vr_lift_lower_right;
 bool hud_gauge_is_world_aligned(int gauge_object);
 void hud_render_gauges(int cockpit_display_num, float frametime);
 void hud_stop_looped_engine_sounds();
@@ -306,6 +308,7 @@ public:
 	int getConfigType() const;
 	int getObjectType() const;
 	void getPosition(int *x, int *y) const;
+	void shiftPosition(int dx, int dy) { position[0] += dx; position[1] += dy; }
 	bool isOffbyDefault() const;
 	bool isActive() const;
 
