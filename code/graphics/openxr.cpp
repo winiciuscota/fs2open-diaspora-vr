@@ -403,6 +403,42 @@ static Sint16 openxr_axis16(float v) {
 
 // Menus are drawn as a flat plane (x in +-2*clip_aspect, y in +-2, z = 4 in FSO space, see gr_opengl_openxr_flip) and the
 // engine paints its own cursor at the mouse position, so the right controller's aim ray is turned into mouse input.
+bool (*Openxr_hud_layer_begin_fn)() = nullptr;
+void (*Openxr_hud_layer_end_fn)() = nullptr;
+
+bool openxr_hud_layer_begin() {
+	return openxr_enabled() && Openxr_hud_layer_begin_fn != nullptr && Openxr_hud_layer_begin_fn();
+}
+
+void openxr_hud_layer_end() {
+	if (Openxr_hud_layer_end_fn != nullptr)
+		Openxr_hud_layer_end_fn();
+}
+
+static float openxr_hud_env(const char* name, float fallback) {
+	const char* v = getenv(name);
+	return (v != nullptr && atof(v) > 0.0) ? static_cast<float>(atof(v)) : fallback;
+}
+
+// FSO's 2D HUD projection (reticle at the canvas centre, target brackets, lead indicators) only matches a symmetric
+// frustum, so the HUD camera is symmetric and centred on the ship's nose. Horizontally it spans the eyes' average FOV
+// (scaled by FSO_VR_HUD_ZOOM), vertically it follows the canvas aspect.
+float openxr_hud_half_fov() {
+	if (!openxr_enabled() || gr_screen.max_w <= 0 || gr_screen.max_h <= 0)
+		return 0.0f;
+	static const float zoom = openxr_hud_env("FSO_VR_HUD_ZOOM", 0.9f);
+	const float h = 0.25f * (xr_views[0].fov.angleRight - xr_views[0].fov.angleLeft + xr_views[1].fov.angleRight - xr_views[1].fov.angleLeft);
+	const float v = 0.25f * (xr_views[0].fov.angleUp - xr_views[0].fov.angleDown + xr_views[1].fov.angleUp - xr_views[1].fov.angleDown);
+	const float aspect = i2fl(gr_screen.max_w) / i2fl(gr_screen.max_h);
+	return atanf(tanf(std::max(h, v)) * zoom / aspect);
+}
+
+// far enough that head movement barely shifts the reticle against distant targets (FSO_VR_HUD_DISTANCE overrides)
+float openxr_hud_distance() {
+	static const float d = openxr_hud_env("FSO_VR_HUD_DISTANCE", 10.0f);
+	return d;
+}
+
 bool openxr_get_pointer_hand(float* u, float* v) {
 	if (!xr_pointer_hand_valid)
 		return false;
@@ -965,5 +1001,18 @@ bool openxr_enabled() { return false; }
 bool openxr_requested() { return false; }
 
 OpenXRTrackingInfo openxr_start_stereo_frame() { return OpenXRTrackingInfo{}; }
+
+bool openxr_get_pointer_hand(float* /*u*/, float* /*v*/) { return false; }
+
+bool (*Openxr_hud_layer_begin_fn)() = nullptr;
+void (*Openxr_hud_layer_end_fn)() = nullptr;
+
+bool openxr_hud_layer_begin() { return false; }
+
+void openxr_hud_layer_end() {}
+
+float openxr_hud_half_fov() { return 0.0f; }
+
+float openxr_hud_distance() { return 0.0f; }
 
 #endif

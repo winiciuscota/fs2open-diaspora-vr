@@ -607,10 +607,10 @@ void VulkanRenderer::resumeSwapChainPass()
 	beginTrackedRenderPass(pass);
 }
 
-void VulkanRenderer::restartCompositionPass()
+void VulkanRenderer::restartCompositionPass(bool transparent)
 {
 	std::array<vk::ClearValue, 2> clearValues;
-	clearValues[0].color.setFloat32({0.0f, 0.0f, 0.0f, 1.0f});
+	clearValues[0].color.setFloat32({0.0f, 0.0f, 0.0f, transparent ? 0.0f : 1.0f});
 	clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 
 	PassBeginDesc pass;

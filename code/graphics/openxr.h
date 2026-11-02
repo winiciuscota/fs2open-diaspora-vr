@@ -53,6 +53,18 @@ bool openxr_enabled();
 // position of the pointing controller on the menu plane as seen from the head, in 0..1 screen units (may lie outside the screen)
 bool openxr_get_pointer_hand(float* u, float* v);
 
+// VR HUD composition layer: in stereo frames the HUD is drawn once (with the ship camera) between begin() and end(),
+// copied into its own swapchain and shown by the runtime as a quad fixed in the cockpit (tracking space), instead of
+// being drawn into the eye images. begin() returns false when the backend has no HUD layer (then draw it as before).
+bool openxr_hud_layer_begin();
+void openxr_hud_layer_end();
+// half vertical FOV (radians) of the symmetric camera the HUD layer is drawn with, and the quad's distance (metres)
+float openxr_hud_half_fov();
+float openxr_hud_distance();
+// set by the graphics backend that implements the HUD layer
+extern bool (*Openxr_hud_layer_begin_fn)();
+extern void (*Openxr_hud_layer_end_fn)();
+
 /**
  * @brief Polls whether OpenXR is requested to start. Required if you need to poll for OpenXR during some initialization where it might not yet be running
  */

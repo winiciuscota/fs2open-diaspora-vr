@@ -43,6 +43,15 @@ std::array<SCP_vector<XrSwapchainImageVulkan2KHR>, 2> Xr_swapchain_images;
 // both -- the release cannot happen before the work is submitted.
 std::array<bool, 2> Xr_eye_acquired = {false, false};
 
+// VR HUD composition layer (see openxr_hud_layer_begin): the HUD is drawn once per stereo frame on a transparent
+// canvas, copied into this swapchain and shown as a quad fixed in the cockpit. It stays acquired until the frame's
+// work is submitted, like the eye images.
+XrSwapchain Xr_hud_swapchain = XR_NULL_HANDLE;
+SCP_vector<XrSwapchainImageVulkan2KHR> Xr_hud_images;
+uint32_t Xr_hud_width = 0, Xr_hud_height = 0;
+bool Xr_hud_acquired = false;
+bool Xr_hud_ready = false;	// the HUD image was written for the frame being built
+
 /**
  * @brief Copy the frame the engine just rendered into one eye's swapchain image
  *
@@ -188,6 +197,83 @@ void release_acquired_images()
 
 		Xr_eye_acquired[i] = false;
 	}
+
+	if (Xr_hud_acquired) {
+		XrSwapchainImageReleaseInfo releaseImageInfo{
+			XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO,
+			nullptr
+		};
+		xrReleaseSwapchainImage(Xr_hud_swapchain, &releaseImageInfo);
+		Xr_hud_acquired = false;
+	}
+}
+
+bool hud_layer_begin()
+{
+	if (Xr_hud_swapchain == XR_NULL_HANDLE || xr_stage != OpenXRFBStage::FIRST) {
+		return false;
+	}
+
+	// nothing of this frame has been drawn yet: start it over on a transparent canvas for the HUD alone
+	auto* renderer = getRendererInstance();
+	renderer->endCurrentRenderPass();
+	renderer->restartCompositionPass(true);
+	Xr_hud_ready = false;
+	return true;
+}
+
+void hud_layer_end()
+{
+	auto* renderer = getRendererInstance();
+	renderer->endCurrentRenderPass();
+
+	XrSwapchainImageAcquireInfo acquireImageInfo{
+		XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO,
+		nullptr
+	};
+	uint32_t activeIndex = 0;
+	if (xrAcquireSwapchainImage(Xr_hud_swapchain, &acquireImageInfo, &activeIndex) == XR_SUCCESS) {
+		XrSwapchainImageWaitInfo waitImageInfo{
+			XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
+			nullptr,
+			std::numeric_limits<int64_t>::max()
+		};
+		xrWaitSwapchainImage(Xr_hud_swapchain, &waitImageInfo);
+		Xr_hud_acquired = true;
+
+		blit_to_swapchain_image(renderer, vk::Image(Xr_hud_images[activeIndex].image), Xr_hud_width, Xr_hud_height);
+		Xr_hud_ready = true;
+	}
+
+	// back to a normal opaque frame for the left eye
+	renderer->restartCompositionPass();
+}
+
+// Quad covering exactly the symmetric HUD camera's frustum, centred on the recentred head and facing straight ahead
+// in the tracking space - i.e. fixed in the cockpit - so the reticle sits on the ship's nose.
+XrCompositionLayerQuad hud_quad_layer()
+{
+	const float D = openxr_hud_distance();
+	const float tV = tanf(openxr_hud_half_fov());
+	const float tH = tV * (i2fl(Xr_hud_width) / i2fl(Xr_hud_height));
+
+	XrCompositionLayerQuad quad{};
+	quad.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+	quad.next = nullptr;
+	// premultiplied alpha: the transparent canvas (alpha 0) lets the scene through, glowing HUD lines add on top
+	quad.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+	quad.space = xr_space;
+	quad.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+	quad.subImage = {
+		Xr_hud_swapchain,
+		{ { 0, 0 }, { static_cast<int32_t>(Xr_hud_width), static_cast<int32_t>(Xr_hud_height) } },
+		0
+	};
+	// xr_offset is the recentred head position in FSO axes (z flipped)
+	quad.pose = XrPosef{ XrQuaternionf{ 0, 0, 0, 1 },
+		XrVector3f{ xr_offset.xyz.x, xr_offset.xyz.y, -xr_offset.xyz.z - D } };
+	quad.size = XrExtent2Df{ 2.0f * D * tH, 2.0f * D * tV };
+	return quad;
 }
 
 /**
@@ -380,9 +466,18 @@ void end_frame(VulkanRenderer* renderer, bool stereo)
 		nullptr
 	};
 
+	XrCompositionLayerQuad hudQuad{};
+	const XrCompositionLayerBaseHeader* layers[2] = { pLayer, nullptr };
+	uint32_t layerCount = 1;
+	if (stereo && Xr_hud_ready) {
+		hudQuad = hud_quad_layer();
+		layers[layerCount++] = (const XrCompositionLayerBaseHeader*)&hudQuad;
+	}
+	Xr_hud_ready = false;
+
 	if (xr_state.shouldRender) {
-		frameEndInfo.layerCount = 1;
-		frameEndInfo.layers = &pLayer;
+		frameEndInfo.layerCount = layerCount;
+		frameEndInfo.layers = layers;
 	}
 
 	xrEndFrame(xr_session, &frameEndInfo);
@@ -477,6 +572,40 @@ bool vulkan_openxr_acquire_swapchain_buffers()
 		if (swapchainAcq != XR_SUCCESS) {
 			mprintf(("Failed to acquire OpenXR swapchain %d with code %d\n", i, static_cast<int>(swapchainAcq)));
 			return false;
+		}
+	}
+
+
+	// HUD layer swapchain, the size of the frame the engine renders (it is copied 1:1)
+	if (Xr_hud_swapchain == XR_NULL_HANDLE) {
+		const vk::Extent2D extent = getRendererInstance()->getRenderExtent();
+		XrSwapchainCreateInfo hudInfo{
+			XR_TYPE_SWAPCHAIN_CREATE_INFO,
+			nullptr,
+			0,
+			XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+			xr_swapchains[0]->format,
+			1,
+			extent.width,
+			extent.height,
+			1,
+			1,
+			1
+		};
+		if (xrCreateSwapchain(xr_session, &hudInfo, &Xr_hud_swapchain) != XR_SUCCESS) {
+			mprintf(("OpenXR: could not create the HUD layer swapchain, the HUD is drawn into the eye images\n"));
+			Xr_hud_swapchain = XR_NULL_HANDLE;
+		} else {
+			uint32_t hudCount = 0;
+			xrEnumerateSwapchainImages(Xr_hud_swapchain, 0, &hudCount, nullptr);
+			Xr_hud_images = SCP_vector<XrSwapchainImageVulkan2KHR>(hudCount,
+				{ XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR, nullptr, VK_NULL_HANDLE });
+			xrEnumerateSwapchainImages(Xr_hud_swapchain, hudCount, &hudCount, (XrSwapchainImageBaseHeader*)Xr_hud_images.data());
+			Xr_hud_width = extent.width;
+			Xr_hud_height = extent.height;
+			Openxr_hud_layer_begin_fn = hud_layer_begin;
+			Openxr_hud_layer_end_fn = hud_layer_end;
+			mprintf(("OpenXR: HUD layer %ux%u, %u images\n", Xr_hud_width, Xr_hud_height, hudCount));
 		}
 	}
 

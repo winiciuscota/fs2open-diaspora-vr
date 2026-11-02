@@ -4033,12 +4033,18 @@ bool game_actually_playing()
 	return (state == GS_STATE_GAME_PLAY) || (state == GS_STATE_DEATH_DIED) || (state == GS_STATE_DEATH_BLEW_UP);
 }
 
+// VR HUD composition layer: Game_vr_hud_layer is set while the eye images of a stereo frame are drawn and the HUD
+// already went to its own layer (so the eyes get the scene only); Game_vr_hud_layer_pass while that layer is drawn.
+static bool Game_vr_hud_layer = false;
+static bool Game_vr_hud_layer_pass = false;
+
 void game_render_hud(camid cid, const fov_t* fov_override = nullptr, int vr_pass = 0)
 {
 	gr_reset_clip();
 
 	//Since we render things twice in VR mode, frametime needs to be halved for HUD, as the HUD uses the frametime to advance ANI's and crucially, the missile lock...
-	float frametime = openxr_enabled() ? flFrametime * 0.5f : flFrametime;
+	// (not when it is drawn once per frame onto the VR HUD layer)
+	float frametime = (openxr_enabled() && !Game_vr_hud_layer_pass) ? flFrametime * 0.5f : flFrametime;
 
 	// second VR pass (panel gauges): the per-frame HUD state was already updated by the first one
 	if(cid.isValid() && vr_pass != 2) {
@@ -4341,6 +4347,69 @@ static bool vr_begin_world_hud(camid cid, const vec3d* offset, const matrix* rot
 	return true;
 }
 
+// Draws the HUD for the VR HUD layer (between openxr_hud_layer_begin/end): once per frame, with the ship's own camera
+// and a symmetric FOV matching the layer's quad, onto the transparent canvas.
+static void game_render_vr_hud_layer()
+{
+	camid cid = game_render_frame_setup();
+
+	const float hud_zoom = (2.0f * openxr_hud_half_fov()) / PROJ_FOV_FACTOR;
+	const fov_t hud_fov = hud_zoom;
+	// every g3_set_view() in the HUD code (brackets, lead indicators ...) must use it: g3_set_fov() alone keeps the
+	// camera's flat-screen projection scale
+	const float saved_sexp_fov = Sexp_fov;
+	if (Sexp_fov <= 0.0f) {
+		Sexp_fov = hud_zoom;
+	}
+	Game_vr_hud_layer_pass = true;
+
+	static int log_stamp = 0;
+	if (timer_get_milliseconds() - log_stamp > 5000) {
+		log_stamp = timer_get_milliseconds();
+		mprintf(("VRHUD layer: half_fov=%.1f deg zoom=%.3f distance=%.1f m canvas=%dx%d\n", fl_degrees(openxr_hud_half_fov()), hud_zoom,
+			openxr_hud_distance(), gr_screen.max_w, gr_screen.max_h));
+	}
+
+	g3_start_frame(0);
+	if (cid.isValid()) {
+		g3_set_view(cid.getCamera());
+	} else {
+		g3_set_view_matrix(&vmd_zero_vector, &vmd_identity_matrix, hud_fov);
+	}
+	if (!(Game_mode & GM_LAB)) {
+		HUD_set_offsets();
+	}
+	g3_end_frame();
+
+	Scripting_didnt_draw_hud = 1;
+	auto scripting_param_list = scripting::hook_param_list(
+		scripting::hook_param("Self", 'o', Viewer_obj),
+		scripting::hook_param("Player", 'o', Player_obj)
+	);
+	if (scripting::hooks::OnHudDraw->isActive()) {
+		Scripting_didnt_draw_hud = scripting::hooks::OnHudDraw->isOverride(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, scripting_param_list) ? 0 : 1;
+	}
+
+	if (Scripting_didnt_draw_hud) {
+		GR_DEBUG_SCOPE("Render VR HUD layer");
+		game_render_hud(cid, &hud_fov, 0);
+	}
+	HUD_reset_clip();
+
+	if ((Game_detail_flags & DETAIL_FLAG_HUD) && (!(Game_mode & GM_MULTIPLAYER) || ((Game_mode & GM_MULTIPLAYER) && !(Net_player->flags & NETINFO_FLAG_OBSERVER)))) {
+		anim_render_all(0, flFrametime);
+	}
+
+	if (!(Viewer_mode & (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY)) && scripting::hooks::OnHudDraw->isActive()) {
+		g3_set_fov(hud_fov);
+		scripting::hooks::OnHudDraw->run(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, std::move(scripting_param_list));
+	}
+
+	gr_reset_clip();
+	Game_vr_hud_layer_pass = false;
+	Sexp_fov = saved_sexp_fov;
+}
+
 void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const matrix* rot_offset = nullptr, const fov_t* fov_override = nullptr) {
 	// clear the screen to black
 	gr_reset_clip();
@@ -4378,78 +4447,80 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 		cid.getCamera()->get_info(&Net_player->s_info.eye_pos, &Net_player->s_info.eye_orient);
 	}
 
-	Scripting_didnt_draw_hud = 1;
-	auto scripting_param_list = scripting::hook_param_list(
-		scripting::hook_param("Self", 'o', Viewer_obj),
-		scripting::hook_param("Player", 'o', Player_obj)
-	);
+	if (!Game_vr_hud_layer) {
+		Scripting_didnt_draw_hud = 1;
+		auto scripting_param_list = scripting::hook_param_list(
+			scripting::hook_param("Self", 'o', Viewer_obj),
+			scripting::hook_param("Player", 'o', Player_obj)
+		);
 
-	if (scripting::hooks::OnHudDraw->isActive()) {
-		Scripting_didnt_draw_hud = scripting::hooks::OnHudDraw->isOverride(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, scripting_param_list) ? 0 : 1;
-	}
-
-	// everything that makes up the HUD in one go, so it can be drawn either on screen or into the VR HUD texture
-	auto draw_hud_layers = [&](const fov_t* hud_fov, int vr_pass) {
-		if (Scripting_didnt_draw_hud) {
-			GR_DEBUG_SCOPE("Render HUD");
-			TRACE_SCOPE(tracing::RenderHUD);
-
-			game_render_hud(cid, hud_fov, vr_pass);
-		}
-		HUD_reset_clip();
-
-		// animations and script overlays are drawn once, with the world-aligned pass
-		if (vr_pass == 2) {
-			return;
+		if (scripting::hooks::OnHudDraw->isActive()) {
+			Scripting_didnt_draw_hud = scripting::hooks::OnHudDraw->isOverride(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, scripting_param_list) ? 0 : 1;
 		}
 
-		if ((Game_detail_flags & DETAIL_FLAG_HUD) && (!(Game_mode & GM_MULTIPLAYER) || ((Game_mode & GM_MULTIPLAYER) && !(Net_player->flags & NETINFO_FLAG_OBSERVER)))) {
-			anim_render_all(0, flFrametime);
-		}
+		// everything that makes up the HUD in one go, so it can be drawn either on screen or into the VR HUD texture
+		auto draw_hud_layers = [&](const fov_t* hud_fov, int vr_pass) {
+			if (Scripting_didnt_draw_hud) {
+				GR_DEBUG_SCOPE("Render HUD");
+				TRACE_SCOPE(tracing::RenderHUD);
 
-		if (!(Viewer_mode & (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY)))
-		{
-			TRACE_SCOPE(tracing::RenderHUDHook);
+				game_render_hud(cid, hud_fov, vr_pass);
+			}
+			HUD_reset_clip();
 
-			// see also hu.isOnHudDrawCalled()
-			if (scripting::hooks::OnHudDraw->isActive()) {
-				if (hud_fov)
-					g3_set_fov(*hud_fov);
+			// animations and script overlays are drawn once, with the world-aligned pass
+			if (vr_pass == 2) {
+				return;
+			}
 
-				scripting::hooks::OnHudDraw->run(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, std::move(scripting_param_list));
+			if ((Game_detail_flags & DETAIL_FLAG_HUD) && (!(Game_mode & GM_MULTIPLAYER) || ((Game_mode & GM_MULTIPLAYER) && !(Net_player->flags & NETINFO_FLAG_OBSERVER)))) {
+				anim_render_all(0, flFrametime);
+			}
+
+			if (!(Viewer_mode & (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY)))
+			{
+				TRACE_SCOPE(tracing::RenderHUDHook);
+
+				// see also hu.isOnHudDrawCalled()
+				if (scripting::hooks::OnHudDraw->isActive()) {
+					if (hud_fov)
+						g3_set_fov(*hud_fov);
+
+					scripting::hooks::OnHudDraw->run(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, std::move(scripting_param_list));
+				}
+			}
+		};
+
+		// one line every few seconds in fs2_open.log saying which HUD path this frame took (VR debugging)
+		if (openxr_enabled()) {
+			static int vr_hud_log_stamp = 0;
+			const int now = timer_get_milliseconds();
+			if (now - vr_hud_log_stamp > 5000) {
+				vr_hud_log_stamp = now;
+				mprintf(("VRHUD path: layer=%d world_active=%d cam_valid=%d panel=%d fov_override=%d pass_ok_scripting=%d dist=%.1f eye_off=(%.3f,%.3f,%.3f)\n",
+					Game_vr_hud_layer ? 1 : 0, vr_world_hud_active() ? 1 : 0, cid.isValid() ? 1 : 0, vr_hud_panel_enabled() ? 1 : 0, fov_override != nullptr ? 1 : 0,
+					Scripting_didnt_draw_hud, vr_hud_distance(),
+					offset ? offset->xyz.x : 0.0f, offset ? offset->xyz.y : 0.0f, offset ? offset->xyz.z : 0.0f));
 			}
 		}
-	};
 
-	// one line every few seconds in fs2_open.log saying which HUD path this frame took (VR debugging)
-	if (openxr_enabled()) {
-		static int vr_hud_log_stamp = 0;
-		const int now = timer_get_milliseconds();
-		if (now - vr_hud_log_stamp > 5000) {
-			vr_hud_log_stamp = now;
-			mprintf(("VRHUD path: world_active=%d cam_valid=%d panel=%d fov_override=%d pass_ok_scripting=%d dist=%.1f eye_off=(%.3f,%.3f,%.3f)\n",
-				vr_world_hud_active() ? 1 : 0, cid.isValid() ? 1 : 0, vr_hud_panel_enabled() ? 1 : 0, fov_override != nullptr ? 1 : 0,
-				Scripting_didnt_draw_hud, vr_hud_distance(),
-				offset ? offset->xyz.x : 0.0f, offset ? offset->xyz.y : 0.0f, offset ? offset->xyz.z : 0.0f));
-		}
-	}
-
-	if (vr_world_hud_active() && cid.isValid() && vr_begin_world_hud(cid, offset, rot_offset, fov_override, false)) {
-		const fov_t hud_zoom = vr_hud_zoom();
-		if (vr_hud_panel_enabled()) {
-			// reticle, brackets, lead indicators ... on the far plane, everything else on a panel in the cockpit
-			draw_hud_layers(&hud_zoom, 1);
-			gr_clear_world_hud();
-			if (vr_begin_world_hud(cid, offset, rot_offset, fov_override, true)) {
-				draw_hud_layers(&hud_zoom, 2);
+		if (vr_world_hud_active() && cid.isValid() && vr_begin_world_hud(cid, offset, rot_offset, fov_override, false)) {
+			const fov_t hud_zoom = vr_hud_zoom();
+			if (vr_hud_panel_enabled()) {
+				// reticle, brackets, lead indicators ... on the far plane, everything else on a panel in the cockpit
+				draw_hud_layers(&hud_zoom, 1);
+				gr_clear_world_hud();
+				if (vr_begin_world_hud(cid, offset, rot_offset, fov_override, true)) {
+					draw_hud_layers(&hud_zoom, 2);
+					gr_clear_world_hud();
+				}
+			} else {
+				draw_hud_layers(&hud_zoom, 0);
 				gr_clear_world_hud();
 			}
 		} else {
-			draw_hud_layers(&hud_zoom, 0);
-			gr_clear_world_hud();
+			draw_hud_layers(fov_override, 0);
 		}
-	} else {
-		draw_hud_layers(fov_override, 0);
 	}
 
 	// check to see if we should display the death died popup
@@ -4638,6 +4709,14 @@ void game_frame(bool paused)
 					}
 				}
 
+				// HUD once, on its own cockpit-fixed layer; the eyes then get the scene only
+				if (openxr_hud_layer_begin()) {
+					util::Random::seed(random);
+					game_render_vr_hud_layer();
+					openxr_hud_layer_end();
+					Game_vr_hud_layer = true;
+				}
+
 				util::Random::seed(random);
 				game_do_full_frame(DEBUG_TIMER_CALL &pose.eyes[0].offset, &pose.eyes[0].orientation, &pose.eyes[0].zoom);
 				std::swap(Stars, Stars_XRBuffer);
@@ -4648,6 +4727,7 @@ void game_frame(bool paused)
 				util::Random::seed(random);
 				game_do_full_frame(DEBUG_TIMER_CALL &pose.eyes[1].offset, &pose.eyes[1].orientation, &pose.eyes[1].zoom);
 				std::swap(Stars, Stars_XRBuffer);
+				Game_vr_hud_layer = false;
 			}
 		} else {
 			game_show_standalone_framerate();

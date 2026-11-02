@@ -348,7 +348,8 @@ class VulkanRenderer {
 	 * the composition image held and starts a clean frame into the same swap
 	 * chain image, without submitting anything.
 	 */
-	void restartCompositionPass();
+	// transparent = clear to (0,0,0,0) instead of opaque black (the VR HUD layer is drawn on a transparent canvas)
+	void restartCompositionPass(bool transparent = false);
 
 	/**
 	 * @brief End the in-flight render pass, if one is active
