@@ -2076,7 +2076,7 @@ void hud_maybe_display_supernova()
  */
 // VR world HUD: the gauges in the lower-right corner of the layout (weapon stores, ship icon, ...) land over the cockpit
 // panel in VR. Lift them as a group to just below the right-hand gauges. Offsets are in 1024x768 HUD units
-// (FSO_VR_HUD_STORES_DX/DY, defaults 0/-270); FSO_VR_HUD_STORES_DY=0 keeps them where the table puts them.
+// (FSO_VR_HUD_STORES_DX/DY, defaults 0/-150); FSO_VR_HUD_STORES_DY=0 keeps them where the table puts them.
 static bool vr_hud_gauge_shifted = false;
 static void vr_hud_shift_gauge_begin(const HudGauge* gauge)
 {
@@ -2088,11 +2088,11 @@ static void vr_hud_shift_gauge_begin(const HudGauge* gauge)
 	const int w = gauge->getBaseWidth(), h = gauge->getBaseHeight();
 	if (getenv("FSO_VR_HUD_DEBUG"))
 		mprintf(("VRHUD gauge type=%d pos=%d,%d base=%dx%d max=%dx%d\n", gauge->getObjectType(), x, y, w, h, gr_screen.max_w, gr_screen.max_h));
-	if (w <= 0 || h <= 0 || x < w * 62 / 100 || y < h * 62 / 100)
+	if (w <= 0 || h <= 0 || x < w * 55 / 100 || y < h * 62 / 100)
 		return;
 
 	static const float dx = getenv("FSO_VR_HUD_STORES_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DX"))) : 0.0f;
-	static const float dy = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -270.0f;
+	static const float dy = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -150.0f;
 	const float scale = i2fl(gr_screen.max_w) / 1024.0f;
 	gr_world_hud_shift(dx * scale, dy * scale);
 	vr_hud_gauge_shifted = true;
