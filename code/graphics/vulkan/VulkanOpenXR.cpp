@@ -222,7 +222,8 @@ void draw_cursor()
 	// laser: a glowing beam from the controller to the cursor (cut where it leaves the screen), brighter and thicker
 	// towards the cursor, with a pulsing target ring around the cursor
 	float hand_u, hand_v;
-	if (openxr_get_pointer_hand(&hand_u, &hand_v)) {
+	const bool laser = openxr_get_pointer_hand(&hand_u, &hand_v);
+	if (laser) {
 		const float w = i2fl(gr_screen.max_w), h = i2fl(gr_screen.max_h);
 		const float cx = i2fl(mouseX), cy = i2fl(mouseY);
 		const float dx = hand_u * w - cx, dy = hand_v * h - cy;
@@ -286,11 +287,19 @@ void draw_cursor()
 				gr_line(fl2i(i2fl(mouseX) + cosf(a0) * radius), fl2i(i2fl(mouseY) + sinf(a0) * radius),
 				        fl2i(i2fl(mouseX) + cosf(a1) * radius), fl2i(i2fl(mouseY) + sinf(a1) * radius), GR_RESIZE_NONE);
 			}
+
+			// bright centre dot where the beam lands
+			gr_init_alphacolor(&c, 230, 245, 255, 255);
+			gr_set_color_fast(&c);
+			gr_circle(mouseX, mouseY, std::max(3, fl2i(6.0f * scale)), GR_RESIZE_NONE);
 		}
 	}
 
-	gr_set_bitmap(cursorBitmap);
-	gr_bitmap(mouseX, mouseY, GR_RESIZE_NONE);
+	// the laser replaces the mouse cursor; without a usable controller ray keep the cursor so the player is not blind
+	if (!laser) {
+		gr_set_bitmap(cursorBitmap);
+		gr_bitmap(mouseX, mouseY, GR_RESIZE_NONE);
+	}
 }
 
 /**
