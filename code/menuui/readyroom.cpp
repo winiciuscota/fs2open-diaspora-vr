@@ -504,7 +504,7 @@ int build_standalone_mission_list_do_frame(bool API_Access)
 
 			if (condition) {
 				Standalone_mission_names[Num_standalone_missions_with_info] = vm_strdup(The_mission.name.c_str());
-				Sim_mission_desc[sim_desc_key(filename.c_str())] = The_mission.mission_desc;
+				Sim_mission_desc[sim_desc_key(filename)] = The_mission.mission_desc;
 				Standalone_mission_flags[Num_standalone_missions_with_info] = The_mission.game_type;
 				int y = Num_lines * (font_height + 2);
 
