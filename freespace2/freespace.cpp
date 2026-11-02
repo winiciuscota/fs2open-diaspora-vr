@@ -4033,14 +4033,15 @@ bool game_actually_playing()
 	return (state == GS_STATE_GAME_PLAY) || (state == GS_STATE_DEATH_DIED) || (state == GS_STATE_DEATH_BLEW_UP);
 }
 
-void game_render_hud(camid cid, const fov_t* fov_override = nullptr)
+void game_render_hud(camid cid, const fov_t* fov_override = nullptr, int vr_pass = 0)
 {
 	gr_reset_clip();
 
 	//Since we render things twice in VR mode, frametime needs to be halved for HUD, as the HUD uses the frametime to advance ANI's and crucially, the missile lock...
 	float frametime = openxr_enabled() ? flFrametime * 0.5f : flFrametime;
 
-	if(cid.isValid()) {
+	// second VR pass (panel gauges): the per-frame HUD state was already updated by the first one
+	if(cid.isValid() && vr_pass != 2) {
 		g3_start_frame(0);		// 0 = turn zbuffering off
 		g3_set_view( cid.getCamera() );
 
@@ -4060,10 +4061,14 @@ void game_render_hud(camid cid, const fov_t* fov_override = nullptr)
 	}
 
 	// main HUD rendering function
+	Hud_vr_pass = vr_pass;
 	hud_render_all(frametime);
+	Hud_vr_pass = 0;
 
 	// Diminish the palette effect
-	game_flash_diminish(flFrametime);
+	if (vr_pass != 1) {
+		game_flash_diminish(flFrametime);
+	}
 }
 
 //100% blackness
@@ -4230,6 +4235,31 @@ static float vr_hud_zoom() { static const float z = vr_hud_env("FSO_VR_HUD_ZOOM"
 static float vr_hud_lines() { static const float l = vr_hud_env("FSO_VR_HUD_LINES", 3.0f); return l; }	// stroke width multiplier
 static float vr_hud_distance() { static const float d = vr_hud_env("FSO_VR_HUD_DISTANCE", 10.0f); return d; }	// metres ahead of the cockpit eye point
 
+// The gauges that do not have to line up with the world are drawn on a panel inside the cockpit instead of on the far
+// plane: FSO_VR_PANEL=0 turns that off; FSO_VR_PANEL_POS="x,y,z" (metres right/up/ahead of the eye point),
+// FSO_VR_PANEL_TILT (degrees the panel is turned towards the pilot) and FSO_VR_PANEL_WIDTH (metres) place it.
+static bool vr_hud_panel_enabled()
+{
+	static const bool on = getenv("FSO_VR_PANEL") == nullptr || atoi(getenv("FSO_VR_PANEL")) != 0;
+	return on;
+}
+static vec3d vr_hud_panel_pos()
+{
+	static vec3d pos = []() {
+		vec3d v = { { { 0.0f, -0.30f, 0.70f } } };
+		if (const char* e = getenv("FSO_VR_PANEL_POS")) {
+			float x, y, z;
+			if (sscanf(e, "%f,%f,%f", &x, &y, &z) == 3) {
+				v.xyz.x = x; v.xyz.y = y; v.xyz.z = z;
+			}
+		}
+		return v;
+	}();
+	return pos;
+}
+static float vr_hud_panel_tilt() { static const float t = vr_hud_env("FSO_VR_PANEL_TILT", 28.0f); return t; }
+static float vr_hud_panel_width() { static const float w = vr_hud_env("FSO_VR_PANEL_WIDTH", 0.6f); return w; }
+
 static bool vr_world_hud_active()
 {
 	static const bool head_locked = getenv("FSO_VR_HUD_HEAD") != nullptr;
@@ -4237,7 +4267,7 @@ static bool vr_world_hud_active()
 }
 
 // Computes the eye's view/projection and the canvas->plane transform and switches gr_set_2d_matrix() over to them.
-static bool vr_begin_world_hud(camid cid, const vec3d* offset, const matrix* rot_offset, const fov_t* fov_override)
+static bool vr_begin_world_hud(camid cid, const vec3d* offset, const matrix* rot_offset, const fov_t* fov_override, bool panel)
 {
 	camera* cam = cid.getCamera();
 	if (cam == nullptr)
@@ -4274,14 +4304,31 @@ static bool vr_begin_world_hud(camid cid, const vec3d* offset, const matrix* rot
 
 	// the plane: spans exactly the fov the HUD pass is drawn with, VR_HUD_DISTANCE ahead of the cockpit eye point
 	const float W = i2fl(gr_screen.max_w), H = i2fl(gr_screen.max_h);
-	const float half_w = vr_hud_distance() * tanf(vr_hud_zoom() * PROJ_FOV_FACTOR * 0.5f);
-	const float half_h = half_w * (H / W);
+	float half_w = vr_hud_distance() * tanf(vr_hud_zoom() * PROJ_FOV_FACTOR * 0.5f);
 
 	vec3d hud_pos;
 	vm_vec_scale_add(&hud_pos, &cam_pos, &cam_orient.vec.fvec, vr_hud_distance());
+	matrix plane_orient = cam_orient;
+
+	if (panel) {
+		// a panel in the cockpit, turned down towards the pilot
+		vec3d panel_world;
+		vec3d panel_local = vr_hud_panel_pos();
+		vm_vec_unrotate(&panel_world, &panel_local, &cam_orient);
+		hud_pos = cam_pos + panel_world;
+
+		angles tilt = vmd_zero_angles;
+		tilt.p = fl_radians(vr_hud_panel_tilt());
+		matrix tilt_mat;
+		vm_angles_2_matrix(&tilt_mat, &tilt);
+		plane_orient = tilt_mat * cam_orient;
+
+		half_w = vr_hud_panel_width() * 0.5f;
+	}
+	const float half_h = half_w * (H / W);
 
 	matrix4 plane_to_world, canvas_to_plane, canvas_to_world;
-	vm_matrix4_set_transform(&plane_to_world, &cam_orient, &hud_pos);
+	vm_matrix4_set_transform(&plane_to_world, &plane_orient, &hud_pos);
 	vm_matrix4_set_identity(&canvas_to_plane);
 	canvas_to_plane.a2d[0][0] = 2.0f * half_w / W;		// canvas x (pixels, right) -> plane x
 	canvas_to_plane.a2d[1][1] = -2.0f * half_h / H;		// canvas y (pixels, down) -> plane y (up)
@@ -4327,14 +4374,19 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 	}
 
 	// everything that makes up the HUD in one go, so it can be drawn either on screen or into the VR HUD texture
-	auto draw_hud_layers = [&](const fov_t* hud_fov) {
+	auto draw_hud_layers = [&](const fov_t* hud_fov, int vr_pass) {
 		if (Scripting_didnt_draw_hud) {
 			GR_DEBUG_SCOPE("Render HUD");
 			TRACE_SCOPE(tracing::RenderHUD);
 
-			game_render_hud(cid, hud_fov);
+			game_render_hud(cid, hud_fov, vr_pass);
 		}
 		HUD_reset_clip();
+
+		// animations and script overlays are drawn once, with the world-aligned pass
+		if (vr_pass == 2) {
+			return;
+		}
 
 		if ((Game_detail_flags & DETAIL_FLAG_HUD) && (!(Game_mode & GM_MULTIPLAYER) || ((Game_mode & GM_MULTIPLAYER) && !(Net_player->flags & NETINFO_FLAG_OBSERVER)))) {
 			anim_render_all(0, flFrametime);
@@ -4354,12 +4406,22 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 		}
 	};
 
-	if (vr_world_hud_active() && cid.isValid() && vr_begin_world_hud(cid, offset, rot_offset, fov_override)) {
+	if (vr_world_hud_active() && cid.isValid() && vr_begin_world_hud(cid, offset, rot_offset, fov_override, false)) {
 		const fov_t hud_zoom = vr_hud_zoom();
-		draw_hud_layers(&hud_zoom);
-		gr_clear_world_hud();
+		if (vr_hud_panel_enabled()) {
+			// reticle, brackets, lead indicators ... on the far plane, everything else on a panel in the cockpit
+			draw_hud_layers(&hud_zoom, 1);
+			gr_clear_world_hud();
+			if (vr_begin_world_hud(cid, offset, rot_offset, fov_override, true)) {
+				draw_hud_layers(&hud_zoom, 2);
+				gr_clear_world_hud();
+			}
+		} else {
+			draw_hud_layers(&hud_zoom, 0);
+			gr_clear_world_hud();
+		}
 	} else {
-		draw_hud_layers(fov_override);
+		draw_hud_layers(fov_override, 0);
 	}
 
 	// check to see if we should display the death died popup

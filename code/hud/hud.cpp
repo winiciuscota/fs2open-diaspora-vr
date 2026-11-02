@@ -2073,6 +2073,42 @@ void hud_maybe_display_supernova()
 /**
  * @brief Undertakes main HUD render. 
  */
+int Hud_vr_pass = 0;
+
+// gauges whose position is a direction in the world: they have to be drawn on the far HUD plane
+bool hud_gauge_is_world_aligned(int gauge_object)
+{
+	switch (gauge_object) {
+		case HUD_OBJECT_CUSTOM:
+		case HUD_OBJECT_SCRIPTING:
+		case HUD_OBJECT_CENTER_RETICLE:
+		case HUD_OBJECT_LEAD:
+		case HUD_OBJECT_LEAD_SIGHT:
+		case HUD_OBJECT_LOCK:
+		case HUD_OBJECT_OFFSCREEN:
+		case HUD_OBJECT_BRACKETS:
+		case HUD_OBJECT_ORIENTATION_TEE:
+		case HUD_OBJECT_HOSTILE_TRI:
+		case HUD_OBJECT_TARGET_TRI:
+		case HUD_OBJECT_MISSILE_TRI:
+		case HUD_OBJECT_FLIGHT_PATH:
+		case HUD_OBJECT_THREAT:
+		case HUD_OBJECT_WEAPON_LINKING:
+		case HUD_OBJECT_TEXT_WARNINGS:
+		case HUD_OBJECT_SUPERNOVA:
+			return true;
+		default:
+			return false;
+	}
+}
+
+static bool hud_gauge_in_vr_pass(const HudGauge* gauge)
+{
+	if (Hud_vr_pass == 0)
+		return true;
+	return hud_gauge_is_world_aligned(gauge->getObjectType()) == (Hud_vr_pass == 1);
+}
+
 void hud_render_all(float frametime)
 {
 	int i;
@@ -2080,11 +2116,15 @@ void hud_render_all(float frametime)
 	hud_render_gauges(-1, frametime);
 
 	// start rendering cockpit dependent gauges if possible
-	for ( i = 0; i < (int)Player_displays.size(); ++i ) {
-		hud_render_gauges(i, frametime);
+	if (Hud_vr_pass != 2) {
+		for ( i = 0; i < (int)Player_displays.size(); ++i ) {
+			hud_render_gauges(i, frametime);
+		}
 	}
 
-	hud_clear_msg_buffer();
+	if (Hud_vr_pass != 1) {
+		hud_clear_msg_buffer();
+	}
 
 	// set font back the way it was
 	font::set_font(font::FONT1);
@@ -2123,6 +2163,10 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 		for(j = 0; j < num_gauges; j++) {
 			GR_DEBUG_SCOPE("Render HUD gauge");
 
+			if (cockpit_display_num < 0 && !hud_gauge_in_vr_pass(sip->hud_gauges[j].get())) {
+				continue;
+			}
+
 			// only preprocess gauges if we're not rendering to cockpit
 			if ( cockpit_display_num < 0 ) {
 				sip->hud_gauges[j]->preprocess();
@@ -2149,6 +2193,10 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 
 		for(j = 0; j < num_gauges; j++) {
 			GR_DEBUG_SCOPE("Render HUD gauge");
+
+			if (!hud_gauge_in_vr_pass(default_hud_gauges[j].get())) {
+				continue;
+			}
 
 			default_hud_gauges[j]->preprocess();
 

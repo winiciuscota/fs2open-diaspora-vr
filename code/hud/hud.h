@@ -125,6 +125,11 @@ void hud_level_close();
 void hud_update_frame(float frametime);		// updates hud systems not dependant on rendering
 void hud_render_preprocess(float frametime);			// renders 3d dependant gauges
 void hud_render_all(float frametime);
+
+// VR world HUD: 0 = every gauge in one pass, 1 = only the gauges that must line up with the world (reticle, brackets,
+// lead indicators ...), 2 = all the other gauges (drawn on a panel inside the cockpit)
+extern int Hud_vr_pass;
+bool hud_gauge_is_world_aligned(int gauge_object);
 void hud_render_gauges(int cockpit_display_num, float frametime);
 void hud_stop_looped_engine_sounds();
 
