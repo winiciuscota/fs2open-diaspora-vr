@@ -4523,7 +4523,21 @@ void game_frame(bool paused)
 
 				SCP_vector<light> Lights_copy = Lights, Static_light_copy = Static_light;
 
-				const auto& pose = openxr_start_stereo_frame();
+				auto pose = openxr_start_stereo_frame();
+
+				// test aid: FSO_VR_FAKE_HEAD=1 sways the head 0.3 m sideways and turns it ~12 degrees (2 s period), to
+				// check on a headless runtime that the world HUD stays put while the head moves
+				if (getenv("FSO_VR_FAKE_HEAD") != nullptr) {
+					const float t = i2fl(timer_get_milliseconds() % 4000) / 4000.0f * PI2;
+					angles ang = vmd_zero_angles;
+					ang.h = 0.2f * sinf(t);
+					matrix head;
+					vm_angles_2_matrix(&head, &ang);
+					for (auto& eye : pose.eyes) {
+						eye.offset.xyz.x += 0.3f * sinf(t);
+						eye.orientation = head * eye.orientation;
+					}
+				}
 
 				util::Random::seed(random);
 				game_do_full_frame(DEBUG_TIMER_CALL &pose.eyes[0].offset, &pose.eyes[0].orientation, &pose.eyes[0].zoom);
