@@ -25,6 +25,8 @@
 
 #endif
 
+extern int HUD_draw;	// hud/hud.cpp: the Toggle HUD control
+
 namespace graphics::vulkan {
 
 namespace {
@@ -474,7 +476,6 @@ void end_frame(VulkanRenderer* renderer, bool stereo)
 	static const bool hud_hide = getenv("FSO_VR_HUD_HIDE") != nullptr && atoi(getenv("FSO_VR_HUD_HIDE")) != 0;
 	// the Toggle HUD control (Shift+O by default) also hides the layer: nothing is drawn into it any more, but the transparent
 	// quad would still be submitted
-	extern int HUD_draw;
 	if (stereo && Xr_hud_ready && !hud_hide && HUD_draw) {
 		hudQuad = hud_quad_layer();
 		layers[layerCount++] = (const XrCompositionLayerBaseHeader*)&hudQuad;
