@@ -159,7 +159,7 @@ void vr_settings_menu()
 		const int rowh = static_cast<int>(ch * 1.9f * s);
 		const int pw = std::min(W - 20, static_cast<int>(760.0f * s));
 		const int px = (W - pw) / 2;
-		const int visible = std::max(4, std::min(COUNT, (H - 6 * rowh) / rowh));
+		const int visible = std::max(4, std::min(static_cast<int>(COUNT), (H - 6 * rowh) / rowh));
 		const int ph = (visible + 4) * rowh;
 		const int py = (H - ph) / 2;
 
