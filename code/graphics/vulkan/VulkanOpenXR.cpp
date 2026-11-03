@@ -1,4 +1,5 @@
 
+#include <cstdlib>
 #include "VulkanOpenXR.h"
 
 #include <algorithm>
@@ -469,7 +470,9 @@ void end_frame(VulkanRenderer* renderer, bool stereo)
 	XrCompositionLayerQuad hudQuad{};
 	const XrCompositionLayerBaseHeader* layers[2] = { pLayer, nullptr };
 	uint32_t layerCount = 1;
-	if (stereo && Xr_hud_ready) {
+	// FSO_VR_HUD_HIDE=1: do not show the HUD layer at all (bisecting the green streaks: do they live in the HUD image or in the scene?)
+	static const bool hud_hide = getenv("FSO_VR_HUD_HIDE") != nullptr && atoi(getenv("FSO_VR_HUD_HIDE")) != 0;
+	if (stereo && Xr_hud_ready && !hud_hide) {
 		hudQuad = hud_quad_layer();
 		layers[layerCount++] = (const XrCompositionLayerBaseHeader*)&hudQuad;
 	}

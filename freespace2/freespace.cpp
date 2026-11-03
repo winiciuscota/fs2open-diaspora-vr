@@ -4385,8 +4385,8 @@ static void game_render_vr_hud_layer()
 	static int log_stamp = 0;
 	if (timer_get_milliseconds() - log_stamp > 5000) {
 		log_stamp = timer_get_milliseconds();
-		mprintf(("VRHUD layer: half_fov=%.1f deg zoom=%.3f distance=%.1f m canvas=%dx%d\n", fl_degrees(openxr_hud_half_fov()), hud_zoom,
-			openxr_hud_distance(), gr_screen.max_w, gr_screen.max_h));
+		mprintf(("VRHUD layer: half_fov=%.1f deg zoom=%.3f distance=%.1f m canvas=%dx%d sun_spot=%.2f\n", fl_degrees(openxr_hud_half_fov()), hud_zoom,
+			openxr_hud_distance(), gr_screen.max_w, gr_screen.max_h, Sun_spot));
 	}
 
 	g3_start_frame(0);

@@ -37,7 +37,7 @@ void line_draw_list::flush() {
 	// VR (green-streak hunt): a segment far longer than the screen (or not finite) is a bad projection of a point behind the
 	// camera; it would be drawn as a long streak across the HUD layer, so it is dropped and logged
 	{
-		const float limit = 0.6f * static_cast<float>(std::max(gr_screen.max_w, gr_screen.max_h));
+		const float limit = 1.5f * static_cast<float>(std::max(gr_screen.max_w, gr_screen.max_h));
 		SCP_vector<line_vertex> kept;
 		kept.reserve(_line_vertices.size());
 		for (size_t i = 0; i + 1 < _line_vertices.size(); i += 2) {
