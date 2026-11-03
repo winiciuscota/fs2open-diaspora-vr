@@ -2082,6 +2082,15 @@ bool Hud_vr_lift_lower_right = false;
 // Offsets are in 1024x768 HUD units: FSO_VR_HUD_STORES_DX / FSO_VR_HUD_STORES_DY (defaults 0 / -150; DY=0 keeps them).
 static HudGauge* vr_hud_lifted_gauge = nullptr;
 static int vr_hud_lift_x = 0, vr_hud_lift_y = 0;
+// gauges that are tied to something in the world (target brackets, lead sight, lock, off-screen arrows, flight path,
+// reticle ...) must stay where the 3D position puts them
+static bool vr_hud_world_aligned(int type)
+{
+	return type == HUD_OBJECT_BRACKETS || type == HUD_OBJECT_LEAD_SIGHT || type == HUD_OBJECT_LOCK ||
+		type == HUD_OBJECT_OFFSCREEN || type == HUD_OBJECT_TARGET_TRI || type == HUD_OBJECT_FLIGHT_PATH ||
+		type == HUD_OBJECT_CENTER_RETICLE || type == HUD_OBJECT_ORIENTATION_TEE || type == HUD_OBJECT_CUSTOM;
+}
+
 static void vr_hud_lift_begin(HudGauge* gauge)
 {
 	if (!Hud_vr_lift_lower_right)
@@ -2090,29 +2099,45 @@ static void vr_hud_lift_begin(HudGauge* gauge)
 	int x = 0, y = 0;
 	gauge->getPosition(&x, &y);
 	const int w = gauge->getBaseWidth(), h = gauge->getBaseHeight();
-	if (w <= 0 || h <= 0 || y < h * 62 / 100)
+	if (w <= 0 || h <= 0)
 		return;
+	const int type = gauge->getObjectType();
+
+	// the HUD is laid out for a tall canvas: squeeze the vertical spread of the panels towards the middle
+	// (FSO_VR_HUD_HEIGHT, default 0.5 = half the height; 1 keeps the layout), the gauges keep their size
+	static const float height_f = getenv("FSO_VR_HUD_HEIGHT") ? std::min(1.0f, std::max(0.2f, static_cast<float>(atof(getenv("FSO_VR_HUD_HEIGHT"))))) : 0.5f;
+	int comp_y = 0;
+	if (height_f < 1.0f && (x != 0 || y != 0) && !vr_hud_world_aligned(type)) {
+		comp_y = fl2i((i2fl(h) * 0.5f - i2fl(y)) * (1.0f - height_f));
+	}
+
+	const bool corner = y >= h * 62 / 100;
 	const bool right = x >= w * 55 / 100;
 	const bool left = x < w * 45 / 100;
-	if (!right && !left)
-		return;
+	int lift_x = 0, lift_y = 0;
+	if (corner && (right || left) && !vr_hud_world_aligned(type)) {
+		// lower right: ship icon, weapon stores; lower left: target box (FSO_VR_HUD_LEFT_DX/DY, defaults 60 / -150)
+		static const float dx_r = getenv("FSO_VR_HUD_STORES_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DX"))) : 0.0f;
+		static const float dy_r = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -150.0f;
+		static const float dx_l = getenv("FSO_VR_HUD_LEFT_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DX"))) : 60.0f;
+		static const float dy_l = getenv("FSO_VR_HUD_LEFT_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DY"))) : -150.0f;
+		// the ship icon (FSO_VR_HUD_SHIP_DX, default 0 = original place) and the stores text (FSO_VR_HUD_WEAPONS_DX, default +25
+		// units: a little to the right, away from the icon) can be nudged separately
+		static const float dx_ship = getenv("FSO_VR_HUD_SHIP_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_SHIP_DX"))) : 0.0f;
+		static const float dx_weap = getenv("FSO_VR_HUD_WEAPONS_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_WEAPONS_DX"))) : 25.0f;
+		const float extra = (type == HUD_OBJECT_HARDPOINTS) ? dx_ship
+			: (type == HUD_OBJECT_PRIMARY_WEAPONS || type == HUD_OBJECT_SECONDARY_WEAPONS) ? dx_weap : 0.0f;
+		const float dx = (right ? dx_r : dx_l) + extra;
+		// with the squeezed layout the corner gauges already come up with the rest: the extra lift only applies at height 1
+		const float dy = (height_f < 1.0f) ? 0.0f : (right ? dy_r : dy_l);
+		lift_x = fl2i(dx * i2fl(w) / 1024.0f);
+		lift_y = fl2i(dy * i2fl(w) / 1024.0f);
+	}
 
-	// lower right: ship icon, weapon stores; lower left: target box (FSO_VR_HUD_LEFT_DX/DY, defaults 60 / -150)
-	static const float dx_r = getenv("FSO_VR_HUD_STORES_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DX"))) : 0.0f;
-	static const float dy_r = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -150.0f;
-	static const float dx_l = getenv("FSO_VR_HUD_LEFT_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DX"))) : 60.0f;
-	static const float dy_l = getenv("FSO_VR_HUD_LEFT_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DY"))) : -150.0f;
-	// the ship icon (FSO_VR_HUD_SHIP_DX, default 0 = original place) and the stores text (FSO_VR_HUD_WEAPONS_DX, default +25
-	// units: a little to the right, away from the icon) can be nudged separately
-	static const float dx_ship = getenv("FSO_VR_HUD_SHIP_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_SHIP_DX"))) : 0.0f;
-	static const float dx_weap = getenv("FSO_VR_HUD_WEAPONS_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_WEAPONS_DX"))) : 25.0f;
-	const int type = gauge->getObjectType();
-	const float extra = (type == HUD_OBJECT_HARDPOINTS) ? dx_ship
-		: (type == HUD_OBJECT_PRIMARY_WEAPONS || type == HUD_OBJECT_SECONDARY_WEAPONS) ? dx_weap : 0.0f;
-	const float dx = (right ? dx_r : dx_l) + extra;
-	const float dy = right ? dy_r : dy_l;
-	vr_hud_lift_x = fl2i(dx * i2fl(w) / 1024.0f);
-	vr_hud_lift_y = fl2i(dy * i2fl(w) / 1024.0f);
+	vr_hud_lift_x = lift_x;
+	vr_hud_lift_y = lift_y + comp_y;
+	if (vr_hud_lift_x == 0 && vr_hud_lift_y == 0)
+		return;
 	gauge->shiftPosition(vr_hud_lift_x, vr_hud_lift_y);
 	vr_hud_lifted_gauge = gauge;
 }
