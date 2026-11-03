@@ -702,6 +702,13 @@ static void gr_string_old(float sx,
 			gr_resize_screen_posf(&x2, &y2, NULL, NULL, resize_mode);
 		}
 
+		// VR: a glyph quad far larger than the font (bad metrics / clip) shows up as green streaks across the HUD layer
+		if (!(wc >= 0.0f && wc <= height * scale_factor * 4.0f + 8.0f) || !(hc >= 0.0f && hc <= height * scale_factor * 4.0f + 8.0f) ||
+			!(x1 > -100000.0f && x2 < 100000.0f && y1 > -100000.0f && y2 < 100000.0f)) {
+			mprintf(("VRHUD bad glyph: letter %d '%c' w %.1f h %.1f (font h %.1f scale %.2f) at %.1f,%.1f\n", letter, (char)(letter + fontData->first_ascii), wc, hc, height, scale_factor, x1, y1));
+			x += raw_spacing * scale_factor;
+			continue;
+		}
 		// Get the character from the UV
 		float u0 = u / bw;
 		float v0 = v / bh;
@@ -824,6 +831,22 @@ void gr_string(float sx, float sy, const char* s, int resize_mode, float scaleMu
 
 	if (!FontManager::isReady() || (*s == '\0')) {
 		return;
+	}
+
+	if (openxr_enabled()) {
+		// VR green-streak hunt: log text that contains "ck" (gauge type, position, font type, canvas)
+		for (const char* q = s; q[0] && q[1]; q++) {
+			if ((q[0] | 32) == 'c' && (q[1] | 32) == 'k') {
+				static int ck_stamp = 0;
+				if (timer_get_milliseconds() - ck_stamp > 3000) {
+					ck_stamp = timer_get_milliseconds();
+					mprintf(("VRHUD text ck: \"%.40s\" at %.1f,%.1f gauge %d font type %d resize %d canvas %dx%d clip %d,%d-%d,%d\n", s, sx, sy, Gr_debug_hud_gauge,
+						(int)FontManager::getCurrentFont()->getType(), resize_mode, gr_screen.max_w, gr_screen.max_h,
+						gr_screen.clip_left, gr_screen.clip_top, gr_screen.clip_right, gr_screen.clip_bottom));
+				}
+				break;
+			}
+		}
 	}
 
 	size_t length;
