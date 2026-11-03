@@ -5,6 +5,10 @@
 #include "2d.h"
 #include "material.h"
 #include "tracing/tracing.h"
+#include "graphics/render.h"
+#include "io/timer.h"
+#include <algorithm>
+#include <cmath>
 
 namespace graphics {
 
@@ -29,6 +33,36 @@ void line_draw_list::flush() {
 
 	GR_DEBUG_SCOPE("Line draw list flush");
 	TRACE_SCOPE(tracing::LineDrawListFlush);
+
+	// VR (green-streak hunt): a segment far longer than the screen (or not finite) is a bad projection of a point behind the
+	// camera; it would be drawn as a long streak across the HUD layer, so it is dropped and logged
+	{
+		const float limit = 0.6f * static_cast<float>(std::max(gr_screen.max_w, gr_screen.max_h));
+		SCP_vector<line_vertex> kept;
+		kept.reserve(_line_vertices.size());
+		for (size_t i = 0; i + 1 < _line_vertices.size(); i += 2) {
+			const auto& a = _line_vertices[i];
+			const auto& b = _line_vertices[i + 1];
+			const float dx = b.position.x - a.position.x, dy = b.position.y - a.position.y;
+			const float len = sqrtf(dx * dx + dy * dy);
+			if (!(len <= limit)) {
+				static int stamp = 0;
+				const int now = timer_get_milliseconds();
+				if (now - stamp > 2000) {
+					stamp = now;
+					mprintf(("VRHUD dropped line: gauge %d (%.0f,%.0f)-(%.0f,%.0f) len %.0f limit %.0f\n", Gr_debug_hud_gauge, a.position.x, a.position.y,
+						b.position.x, b.position.y, len, limit));
+				}
+				continue;
+			}
+			kept.push_back(a);
+			kept.push_back(b);
+		}
+		_line_vertices.swap(kept);
+		if (_line_vertices.empty()) {
+			return;
+		}
+	}
 
 	material line_mat;
 	line_mat.set_blend_mode(ALPHA_BLEND_ALPHA_BLEND_ALPHA);
