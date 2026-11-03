@@ -1,4 +1,7 @@
 #include "VulkanDraw.h"
+#include <map>
+#include "graphics/render.h"
+#include "io/timer.h"
 
 #include <algorithm>
 #include <array>
@@ -363,6 +366,19 @@ void vulkan_render_primitives(material* material_info,
 	gr_buffer_handle buffer_handle,
 	size_t buffer_offset)
 {
+	if (Gr_vr_hud_layer_pass_active) {
+		// VR debug: log every kind of draw call that (re)appears on the HUD layer, to tell what the streak draws are
+		static std::map<int, int> last_seen;
+		const int key = (Gr_debug_hud_gauge & 1023) * 4096 + static_cast<int>(prim_type) * 256 + static_cast<int>(material_info->get_shader_type());
+		const int now = timer_get_milliseconds();
+		auto it = last_seen.find(key);
+		if (it == last_seen.end() || now - it->second > 2000) {
+			mprintf(("VRHUD layer draw: gauge %d prim %d shader %d verts %d\n", Gr_debug_hud_gauge, static_cast<int>(prim_type),
+				static_cast<int>(material_info->get_shader_type()), n_verts));
+		}
+		last_seen[key] = now;
+	}
+
 	// Set up uniform buffers before rendering (like OpenGL does)
 	gr_matrix_set_uniforms();
 	vulkan_set_default_material_uniforms(material_info);

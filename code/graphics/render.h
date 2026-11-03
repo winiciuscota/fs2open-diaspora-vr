@@ -108,6 +108,7 @@ void gr_string_outlined(int x, int y, const char* text, const color* foreground,
  */
 // object type of the HUD gauge being drawn, for VR debugging (-1 = none)
 extern int Gr_debug_hud_gauge;
+extern bool Gr_vr_hud_layer_pass_active;	// VR: the HUD layer is being drawn (debug probes)
 void gr_debug_vr_hud_probe(const char* what);
 void gr_line(int x1, int y1, int x2, int y2, int resize_mode = GR_RESIZE_FULL);
 /**

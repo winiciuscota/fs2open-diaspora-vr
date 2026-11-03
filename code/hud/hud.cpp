@@ -2129,7 +2129,7 @@ int Hud_vr_pass = 0;
 
 bool hud_vr_skip_model_insets()
 {
-	return Gr_world_hud_active || Hud_vr_lift_lower_right;
+	return Gr_world_hud_active;
 }
 
 // gauges whose position is a direction in the world: they have to be drawn on the far HUD plane

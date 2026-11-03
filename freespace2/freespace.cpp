@@ -4380,6 +4380,7 @@ static void game_render_vr_hud_layer()
 		Sexp_fov = hud_zoom;
 	}
 	Game_vr_hud_layer_pass = true;
+	Gr_vr_hud_layer_pass_active = true;
 
 	static int log_stamp = 0;
 	if (timer_get_milliseconds() - log_stamp > 5000) {
@@ -4416,6 +4417,8 @@ static void game_render_vr_hud_layer()
 	}
 	HUD_reset_clip();
 
+	game_maybe_do_dead_popup(flFrametime);
+
 	Gr_debug_hud_gauge = 901;
 	if ((Game_detail_flags & DETAIL_FLAG_HUD) && (!(Game_mode & GM_MULTIPLAYER) || ((Game_mode & GM_MULTIPLAYER) && !(Net_player->flags & NETINFO_FLAG_OBSERVER)))) {
 		anim_render_all(0, flFrametime);
@@ -4430,6 +4433,7 @@ static void game_render_vr_hud_layer()
 
 	gr_reset_clip();
 	Game_vr_hud_layer_pass = false;
+	Gr_vr_hud_layer_pass_active = false;
 	Sexp_fov = saved_sexp_fov;
 }
 
@@ -4605,8 +4609,11 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 
 	DEBUG_GET_TIME(render2_time2)
 
-	// maybe render and process the dead popup
-	game_maybe_do_dead_popup(flFrametime);
+	// maybe render and process the dead popup (VR with the HUD layer: it is drawn on that layer, fixed in space, instead
+	// of into each eye where it would be glued to the head)
+	if (!Game_vr_hud_layer) {
+		game_maybe_do_dead_popup(flFrametime);
+	}
 
 	// If a regular popup is active, don't flip (popup code flips)
 	if (!popup_running_state()) {
