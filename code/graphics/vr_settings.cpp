@@ -15,6 +15,7 @@
 #include "io/mouse.h"
 #include "osapi/osapi.h"
 #include "ui/ui.h"
+#include "ui/uidefs.h"
 
 namespace vrset {
 
@@ -152,7 +153,7 @@ void vr_settings_menu()
 		const int W = gr_screen.max_w_unscaled, H = gr_screen.max_h_unscaled;
 
 		// layout: a panel in the middle, scaled with the screen
-		gr_set_font(font::FONT1);
+		font::set_font(font::FONT1);
 		int cw = 0, ch = 0;
 		gr_get_string_size(&cw, &ch, "M");
 		const float s = std::max(1.0f, std::min(static_cast<float>(W) / 1024.0f, static_cast<float>(H) / 768.0f));
