@@ -11,6 +11,7 @@
 
 
 #include "bmpman/bmpman.h"
+#include "graphics/vr_settings.h"
 #include "freespace.h"
 #include "cmdline/cmdline.h"
 #include "controlconfig/controlsconfig.h"
@@ -1281,6 +1282,10 @@ void options_menu_do_frame(float  /*frametime*/)
 
 			break;
 
+		case KEY_F9:	// Diaspora port: VR settings screen
+			vr_settings_menu();
+			break;
+
 		case KEY_ESC:
 			if (Escape_key_behavior_in_options == EscapeKeyBehaviorInOptions::SAVE) {
 				options_accept();
@@ -1341,6 +1346,10 @@ void options_menu_do_frame(float  /*frametime*/)
 	} 
 
 	Ui_window.draw();
+
+	// Diaspora port: how to reach the VR settings
+	gr_set_color_fast(&Color_text_normal);
+	gr_printf_menu(8, 748, "%s", "F9: VR settings");
 
 	// NOTE : this must be done here so that any special drawing crap we do is not overwritten by the UI_WINDOW::draw() call
 	// do specific processing for the multiplayer tab

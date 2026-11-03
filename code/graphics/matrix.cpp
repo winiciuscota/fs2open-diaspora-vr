@@ -142,7 +142,6 @@ void gr_end_instance_matrix()
 
 // the projection matrix; fov, aspect ratio, near, far
 void gr_set_proj_matrix(fov_t fov, float aspect, float z_near, float z_far) {
-	gr_debug_vr_hud_probe("sets a 3D projection");
 	if (gr_screen.rendering_to_texture != -1) {
 		gr_set_viewport(gr_screen.offset_x, gr_screen.offset_y, gr_screen.clip_width, gr_screen.clip_height);
 	} else {

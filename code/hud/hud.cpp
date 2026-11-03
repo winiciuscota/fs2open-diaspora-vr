@@ -9,6 +9,7 @@
 
 
 #include "ai/aigoals.h"
+#include "graphics/vr_settings.h"
 #include "asteroid/asteroid.h"
 #include "bmpman/bmpman.h"
 #include "cmdline/cmdline.h"
@@ -2105,7 +2106,7 @@ static void vr_hud_lift_begin(HudGauge* gauge)
 
 	// the HUD is laid out for a tall canvas: squeeze the vertical spread of the panels towards the middle
 	// (FSO_VR_HUD_HEIGHT, default 1 = off; 0.5 = half the height), the gauges keep their size
-	static const float height_f = getenv("FSO_VR_HUD_HEIGHT") ? std::min(1.0f, std::max(0.2f, static_cast<float>(atof(getenv("FSO_VR_HUD_HEIGHT"))))) : 1.0f;
+	const float height_f = vrset::get(vrset::HUD_HEIGHT);
 	int comp_y = 0;
 	if (height_f < 1.0f && (x != 0 || y != 0) && !vr_hud_world_aligned(type)) {
 		comp_y = fl2i((i2fl(h) * 0.5f - i2fl(y)) * (1.0f - height_f));
@@ -2117,14 +2118,14 @@ static void vr_hud_lift_begin(HudGauge* gauge)
 	int lift_x = 0, lift_y = 0;
 	if (corner && (right || left) && !vr_hud_world_aligned(type)) {
 		// lower right: ship icon, weapon stores; lower left: target box (FSO_VR_HUD_LEFT_DX/DY, defaults 60 / -150)
-		static const float dx_r = getenv("FSO_VR_HUD_STORES_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DX"))) : 0.0f;
-		static const float dy_r = getenv("FSO_VR_HUD_STORES_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_STORES_DY"))) : -150.0f;
-		static const float dx_l = getenv("FSO_VR_HUD_LEFT_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DX"))) : 60.0f;
-		static const float dy_l = getenv("FSO_VR_HUD_LEFT_DY") ? static_cast<float>(atof(getenv("FSO_VR_HUD_LEFT_DY"))) : -150.0f;
+		const float dx_r = vrset::get(vrset::STORES_DX);
+		const float dy_r = vrset::get(vrset::STORES_DY);
+		const float dx_l = vrset::get(vrset::LEFT_DX);
+		const float dy_l = vrset::get(vrset::LEFT_DY);
 		// the ship icon (FSO_VR_HUD_SHIP_DX, default 0 = original place) and the stores text (FSO_VR_HUD_WEAPONS_DX, default +25
 		// units: a little to the right, away from the icon) can be nudged separately
-		static const float dx_ship = getenv("FSO_VR_HUD_SHIP_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_SHIP_DX"))) : 0.0f;
-		static const float dx_weap = getenv("FSO_VR_HUD_WEAPONS_DX") ? static_cast<float>(atof(getenv("FSO_VR_HUD_WEAPONS_DX"))) : 25.0f;
+		const float dx_ship = vrset::get(vrset::SHIP_DX);
+		const float dx_weap = vrset::get(vrset::WEAPONS_DX);
 		const float extra = (type == HUD_OBJECT_HARDPOINTS) ? dx_ship
 			: (type == HUD_OBJECT_PRIMARY_WEAPONS || type == HUD_OBJECT_SECONDARY_WEAPONS) ? dx_weap : 0.0f;
 		const float dx = (right ? dx_r : dx_l) + extra;
@@ -2184,27 +2185,8 @@ bool hud_gauge_is_world_aligned(int gauge_object)
 	}
 }
 
-// VR debugging: FSO_VR_HUD_SKIP="23,53" hides gauges of those object types in VR (find which one draws an artifact)
-static bool hud_gauge_vr_skipped(int gauge_object)
-{
-	static const SCP_vector<int> skip = []() {
-		SCP_vector<int> v;
-		if (const char* e = getenv("FSO_VR_HUD_SKIP")) {
-			for (const char* p = e; *p; ) {
-				v.push_back(atoi(p));
-				while (*p && *p != ',') p++;
-				if (*p == ',') p++;
-			}
-		}
-		return v;
-	}();
-	return openxr_enabled() && std::find(skip.begin(), skip.end(), gauge_object) != skip.end();
-}
-
 static bool hud_gauge_in_vr_pass(const HudGauge* gauge)
 {
-	if (hud_gauge_vr_skipped(gauge->getObjectType()))
-		return false;
 	if (Hud_vr_pass == 0)
 		return true;
 	return hud_gauge_is_world_aligned(gauge->getObjectType()) == (Hud_vr_pass == 1);
@@ -2288,9 +2270,7 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 			sip->hud_gauges[j]->resetClip();
 			sip->hud_gauges[j]->setFont();
 			vr_hud_lift_begin(sip->hud_gauges[j].get());
-			Gr_debug_hud_gauge = sip->hud_gauges[j]->getObjectType();
 			sip->hud_gauges[j]->render(frametime);
-			Gr_debug_hud_gauge = -1;
 			vr_hud_lift_end();
 		}
 	} else {
@@ -2316,9 +2296,7 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 			default_hud_gauges[j]->resetClip();
 			default_hud_gauges[j]->setFont();
 			vr_hud_lift_begin(default_hud_gauges[j].get());
-			Gr_debug_hud_gauge = default_hud_gauges[j]->getObjectType();
 			default_hud_gauges[j]->render(frametime);
-			Gr_debug_hud_gauge = -1;
 			vr_hud_lift_end();
 		}
 	}

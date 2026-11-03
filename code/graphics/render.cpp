@@ -1,5 +1,6 @@
 
 #include "graphics/render.h"
+#include "graphics/vr_settings.h"
 #include "graphics/openxr.h"
 #include "io/timer.h"
 
@@ -56,7 +57,7 @@ void gr_flash(int r, int g, int b) {
 	// VR: full-view white/colour flashes (explosions, hits, the explosion script's blinding flash) are far harsher in a
 	// headset; scale them (FSO_VR_FLASH, 0..1, default 0.35)
 	if (openxr_enabled()) {
-		static const float vr_flash = getenv("FSO_VR_FLASH") ? static_cast<float>(atof(getenv("FSO_VR_FLASH"))) : 0.35f;
+		const float vr_flash = vrset::get(vrset::FLASH);
 		r = fl2i(i2fl(r) * vr_flash);
 		g = fl2i(i2fl(g) * vr_flash);
 		b = fl2i(i2fl(b) * vr_flash);
@@ -702,13 +703,6 @@ static void gr_string_old(float sx,
 			gr_resize_screen_posf(&x2, &y2, NULL, NULL, resize_mode);
 		}
 
-		// VR: a glyph quad far larger than the font (bad metrics / clip) shows up as green streaks across the HUD layer
-		if (!(wc >= 0.0f && wc <= height * scale_factor * 4.0f + 8.0f) || !(hc >= 0.0f && hc <= height * scale_factor * 4.0f + 8.0f) ||
-			!(x1 > -100000.0f && x2 < 100000.0f && y1 > -100000.0f && y2 < 100000.0f)) {
-			mprintf(("VRHUD bad glyph: letter %d '%c' w %.1f h %.1f (font h %.1f scale %.2f) at %.1f,%.1f\n", letter, (char)(letter + fontData->first_ascii), wc, hc, height, scale_factor, x1, y1));
-			x += raw_spacing * scale_factor;
-			continue;
-		}
 		// Get the character from the UV
 		float u0 = u / bw;
 		float v0 = v / bh;
@@ -831,22 +825,6 @@ void gr_string(float sx, float sy, const char* s, int resize_mode, float scaleMu
 
 	if (!FontManager::isReady() || (*s == '\0')) {
 		return;
-	}
-
-	if (openxr_enabled()) {
-		// VR green-streak hunt: log text that contains "ck" (gauge type, position, font type, canvas)
-		for (const char* q = s; q[0] && q[1]; q++) {
-			if ((q[0] | 32) == 'c' && (q[1] | 32) == 'k') {
-				static int ck_stamp = 0;
-				if (timer_get_milliseconds() - ck_stamp > 3000) {
-					ck_stamp = timer_get_milliseconds();
-					mprintf(("VRHUD text ck: \"%.40s\" at %.1f,%.1f gauge %d font type %d resize %d canvas %dx%d clip %d,%d-%d,%d\n", s, sx, sy, Gr_debug_hud_gauge,
-						(int)FontManager::getCurrentFont()->getType(), resize_mode, gr_screen.max_w, gr_screen.max_h,
-						gr_screen.clip_left, gr_screen.clip_top, gr_screen.clip_right, gr_screen.clip_bottom));
-				}
-				break;
-			}
-		}
 	}
 
 	size_t length;
@@ -1033,43 +1011,7 @@ static void gr_line(float x1, float y1, float x2, float y2, int resize_mode) {
 	endDrawing(path);
 }
 
-// VR debugging: the HUD gauge being drawn (object type, -1 = none) and a log of lines that start at the canvas origin,
-// which show up as streaks across the VR HUD layer
-int Gr_debug_hud_gauge = -1;
-bool Gr_vr_hud_layer_pass_active = false;
-
-// logs (rate limited per gauge type) when a HUD gauge draws something of kind `what` onto the screen canvas in VR
-void gr_debug_vr_hud_probe(const char* what)
-{
-	if (!openxr_enabled() || Gr_debug_hud_gauge < 0)
-		return;
-	static int stamps[64] = {};
-	const int slot = Gr_debug_hud_gauge & 63;
-	const int now = timer_get_milliseconds();
-	if (now - stamps[slot] < 5000)
-		return;
-	stamps[slot] = now;
-	mprintf(("VRHUD probe: gauge type %d %s (render target %d, canvas %dx%d)\n", Gr_debug_hud_gauge, what,
-		gr_screen.rendering_to_texture, gr_screen.max_w, gr_screen.max_h));
-}
-
 void gr_line(int x1, int y1, int x2, int y2, int resize_mode) {
-	if (openxr_enabled() && (abs(x2 - x1) > gr_screen.max_w * 2 / 5 || abs(y2 - y1) > gr_screen.max_h * 2 / 5)) {
-		static int long_stamp[1024] = {};
-		const int slot = Gr_debug_hud_gauge & 1023;
-		if (timer_get_milliseconds() - long_stamp[slot] > 4000) {
-			long_stamp[slot] = timer_get_milliseconds();
-			mprintf(("VRHUD long line: gauge type %d draws (%d,%d)-(%d,%d) on a %dx%d canvas\n", Gr_debug_hud_gauge, x1, y1, x2, y2, gr_screen.max_w, gr_screen.max_h));
-		}
-	}
-	if (openxr_enabled() && Gr_debug_hud_gauge >= 0 && ((abs(x1) <= 2 && abs(y1) <= 2) || (abs(x2) <= 2 && abs(y2) <= 2))) {
-		static int log_stamp = 0;
-		if (timer_get_milliseconds() - log_stamp > 3000) {
-			log_stamp = timer_get_milliseconds();
-			mprintf(("VRHUD origin line: gauge type %d draws (%d,%d)-(%d,%d)\n", Gr_debug_hud_gauge, x1, y1, x2, y2));
-		}
-	}
-
 	if (gr_screen.mode == GraphicsAPI::Stub) {
 		return;
 	}

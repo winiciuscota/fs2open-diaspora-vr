@@ -1,4 +1,5 @@
 #include "openxr_internal.h"
+#include "graphics/vr_settings.h"
 
 #include "camera/camera.h"
 #include "graphics/2d.h"
@@ -428,7 +429,7 @@ static float openxr_hud_env(const char* name, float fallback) {
 float openxr_hud_half_fov() {
 	if (!openxr_enabled() || gr_screen.max_w <= 0 || gr_screen.max_h <= 0)
 		return 0.0f;
-	static const float zoom = openxr_hud_env("FSO_VR_HUD_ZOOM", 0.9f);
+	const float zoom = vrset::get(vrset::HUD_ZOOM);
 	const float h = 0.25f * (xr_views[0].fov.angleRight - xr_views[0].fov.angleLeft + xr_views[1].fov.angleRight - xr_views[1].fov.angleLeft);
 	const float v = 0.25f * (xr_views[0].fov.angleUp - xr_views[0].fov.angleDown + xr_views[1].fov.angleUp - xr_views[1].fov.angleDown);
 	const float aspect = i2fl(gr_screen.max_w) / i2fl(gr_screen.max_h);
@@ -436,14 +437,12 @@ float openxr_hud_half_fov() {
 }
 
 float openxr_menu_scale() {
-	static const float scale = openxr_hud_env("FSO_VR_MENU_SCALE", 1.35f);
-	return scale;
+	return vrset::get(vrset::MENU_SCALE);
 }
 
 // far enough that head movement barely shifts the reticle against distant targets (FSO_VR_HUD_DISTANCE overrides)
 float openxr_hud_distance() {
-	static const float d = openxr_hud_env("FSO_VR_HUD_DISTANCE", 10.0f);
-	return d;
+	return vrset::get(vrset::HUD_DISTANCE);
 }
 
 bool openxr_get_pointer_hand(float* u, float* v) {

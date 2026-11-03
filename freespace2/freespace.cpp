@@ -29,6 +29,7 @@
 #endif
 
 #include "globalincs/alphacolors.h"
+#include "graphics/vr_settings.h"
 #include "globalincs/crashdump.h"
 #include "globalincs/mspdb_callstack.h"
 #include "globalincs/version.h"
@@ -858,7 +859,7 @@ static void game_flash_draw()
 
 		if ( Sun_spot > 0.0f && gr_sunglare_enabled() && !gr_lightshafts_enabled()) {
 			// VR: looking at the sun washes the whole headset view out; keep a hint of it (FSO_VR_SUNGLARE, default 0.3)
-			static const float vr_sunglare = getenv("FSO_VR_SUNGLARE") ? static_cast<float>(atof(getenv("FSO_VR_SUNGLARE"))) : 0.3f;
+			const float vr_sunglare = vrset::get(vrset::SUNGLARE);
 			const float glare = Sun_spot * (openxr_enabled() ? vr_sunglare : 1.0f);
 			r += fl2i(glare*128.0f);
 			g += fl2i(glare*128.0f);
@@ -3625,7 +3626,7 @@ void game_render_frame( camid cid, const vec3d* offset, const matrix* rot_offset
 
 		// VR: no camera shake (hits, afterburner, explosions) unless FSO_VR_SHAKE=1 - a shaking view in a headset is a
 		// classic nausea trigger
-		static const bool vr_shake = getenv("FSO_VR_SHAKE") != nullptr && atoi(getenv("FSO_VR_SHAKE")) != 0;
+		const bool vr_shake = vrset::on(vrset::SHAKE);
 		const bool shake = !openxr_enabled() || vr_shake;
 
 		//Handle jitter if not cutscene camera
@@ -4380,13 +4381,12 @@ static void game_render_vr_hud_layer()
 		Sexp_fov = hud_zoom;
 	}
 	Game_vr_hud_layer_pass = true;
-	Gr_vr_hud_layer_pass_active = true;
 
 	static int log_stamp = 0;
 	if (timer_get_milliseconds() - log_stamp > 5000) {
 		log_stamp = timer_get_milliseconds();
-		mprintf(("VRHUD layer: half_fov=%.1f deg zoom=%.3f distance=%.1f m canvas=%dx%d sun_spot=%.2f\n", fl_degrees(openxr_hud_half_fov()), hud_zoom,
-			openxr_hud_distance(), gr_screen.max_w, gr_screen.max_h, Sun_spot));
+		mprintf(("VRHUD layer: half_fov=%.1f deg zoom=%.3f distance=%.1f m canvas=%dx%d\n", fl_degrees(openxr_hud_half_fov()), hud_zoom,
+			openxr_hud_distance(), gr_screen.max_w, gr_screen.max_h));
 	}
 
 	g3_start_frame(0);
@@ -4419,21 +4419,17 @@ static void game_render_vr_hud_layer()
 
 	game_maybe_do_dead_popup(flFrametime);
 
-	Gr_debug_hud_gauge = 901;
 	if ((Game_detail_flags & DETAIL_FLAG_HUD) && (!(Game_mode & GM_MULTIPLAYER) || ((Game_mode & GM_MULTIPLAYER) && !(Net_player->flags & NETINFO_FLAG_OBSERVER)))) {
 		anim_render_all(0, flFrametime);
 	}
 
-	Gr_debug_hud_gauge = 900;
 	if (!(Viewer_mode & (VM_EXTERNAL | VM_DEAD_VIEW | VM_WARP_CHASE | VM_PADLOCK_ANY)) && scripting::hooks::OnHudDraw->isActive()) {
 		g3_set_fov(hud_fov);
 		scripting::hooks::OnHudDraw->run(scripting::hooks::ObjectDrawConditions{ Viewer_obj }, std::move(scripting_param_list));
 	}
-	Gr_debug_hud_gauge = -1;
 
 	gr_reset_clip();
 	Game_vr_hud_layer_pass = false;
-	Gr_vr_hud_layer_pass_active = false;
 	Sexp_fov = saved_sexp_fov;
 }
 
@@ -4537,19 +4533,6 @@ void game_do_full_frame(DEBUG_TIMER_SIG const vec3d* offset = nullptr, const mat
 				}
 			}
 		};
-
-		// one line every few seconds in fs2_open.log saying which HUD path this frame took (VR debugging)
-		if (openxr_enabled()) {
-			static int vr_hud_log_stamp = 0;
-			const int now = timer_get_milliseconds();
-			if (now - vr_hud_log_stamp > 5000) {
-				vr_hud_log_stamp = now;
-				mprintf(("VRHUD path: layer=%d world_active=%d cam_valid=%d panel=%d fov_override=%d pass_ok_scripting=%d dist=%.1f eye_off=(%.3f,%.3f,%.3f)\n",
-					Game_vr_hud_layer ? 1 : 0, vr_world_hud_active() ? 1 : 0, cid.isValid() ? 1 : 0, vr_hud_panel_enabled() ? 1 : 0, fov_override != nullptr ? 1 : 0,
-					Scripting_didnt_draw_hud, vr_hud_distance(),
-					offset ? offset->xyz.x : 0.0f, offset ? offset->xyz.y : 0.0f, offset ? offset->xyz.z : 0.0f));
-			}
-		}
 
 		if (vr_world_hud_active() && cid.isValid() && vr_begin_world_hud(cid, offset, rot_offset, fov_override, false)) {
 			const fov_t hud_zoom = vr_hud_zoom();

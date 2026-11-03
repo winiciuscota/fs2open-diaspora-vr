@@ -329,7 +329,6 @@ void stars_project_2d_onto_sphere( vec3d *pnt, float rho, float phi, float theta
 
 void g3_draw_htl_line(const vec3d *start, const vec3d *end)
 {
-	gr_debug_vr_hud_probe("draws a 3D line (htl)");
 	//gr_line_htl(start, end);
 	g3_render_line_3d(true, start, end);
 }
@@ -365,7 +364,6 @@ void g3_draw_htl_sphere(const vec3d* position, float radius)
 
 void g3_render_primitives(material* mat, vertex* verts, int n_verts, primitive_type prim_type, bool orthographic)
 {
-	gr_debug_vr_hud_probe("renders primitives");
 	vertex_layout layout;
 
 	if ( orthographic ) {
@@ -442,7 +440,6 @@ void g3_render_primitives_colored_textured(material* mat, vertex* verts, int n_v
 // adapted from g3_draw_polygon()
 void g3_render_rect_oriented_internal(material* material_params, vec3d *pos, matrix *ori, float width, float height)
 {
-	gr_debug_vr_hud_probe("draws a 3D rect");
 	//idiot-proof
 	if ( width == 0 || height == 0 )
 		return;
@@ -824,7 +821,6 @@ void g3_render_rect_screen_aligned(material *mat_params, vertex *pnt, int orient
 //void render_laser_2d(int texture, color* clr, float alpha, vec3d *headp, float head_width, vec3d *tailp, float tail_width, float max_len)
 void g3_render_laser_2d(material *mat_params, vec3d *headp, float head_width, vec3d *tailp, float tail_width, float max_len)
 {
-	gr_debug_vr_hud_probe("draws a 2D laser");
 	float headx, heady, headr, tailx, taily, tailr;
 	vertex pt1, pt2;
 	float depth;
@@ -963,7 +959,6 @@ void g3_render_laser_2d(material *mat_params, vec3d *headp, float head_width, ve
 // adapted from g3_draw_rod()
 void g3_render_rod(const color *clr, int num_points, const vec3d *pvecs, float width)
 {
-	gr_debug_vr_hud_probe("draws a rod");
 	const int MAX_ROD_VERTS = 100;
 	vec3d uvec, fvec, rvec;
 	vec3d vecs[2];
@@ -1142,7 +1137,6 @@ void g3_render_shield_icon(coord2d coords[6], int resize_mode)
 // adapted from gr_opengl_line_htl()
 void g3_render_line_3d(color *clr, bool depth_testing, const vec3d *start, const vec3d *end)
 {
-	gr_debug_vr_hud_probe("draws a 3D line");
 	material mat;
 
 	mat.set_depth_mode((depth_testing) ? ZBUFFER_TYPE_READ : ZBUFFER_TYPE_NONE);

@@ -1,4 +1,5 @@
 #include "VulkanPostProcessing.h"
+#include "graphics/vr_settings.h"
 
 #include <array>
 
@@ -516,13 +517,9 @@ void VulkanLDR::executeLightshafts(vk::CommandBuffer cmd)
 		return;
 	}
 
-	// VR: the radial blur smears the bright HUD pixels into long streaks pointing at the sun (green bands across the view);
-	// FSO_VR_SHAFTS=1 turns it back on
-	if (openxr_enabled()) {
-		static const bool shafts = getenv("FSO_VR_SHAFTS") != nullptr && atoi(getenv("FSO_VR_SHAFTS")) != 0;
-		if (!shafts) {
-			return;
-		}
+	// VR: the sun's light shafts are a setting (VR settings screen, FSO_VR_SHAFTS)
+	if (openxr_enabled() && !vrset::on(vrset::SHAFTS)) {
+		return;
 	}
 
 	// Find a global light with glare facing the camera

@@ -471,6 +471,8 @@ add_file_folder("Graphics"
 	graphics/matrix.h
 	graphics/openxr.cpp
 	graphics/openxr.h
+	graphics/vr_settings.cpp
+	graphics/vr_settings.h
 	graphics/openxr_internal.h
 	graphics/post_processing.cpp
 	graphics/post_processing.h

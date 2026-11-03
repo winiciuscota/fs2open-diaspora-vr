@@ -156,25 +156,6 @@ size_t maxVertCount(const NVGpath* paths, size_t npaths) {
 }
 
 
-// VR (green-streak hunt): a stroke/fill whose vertices are non-finite or far outside the canvas becomes a long thin
-// sliver across the whole HUD layer (triangle strips spike when one vertex is bad). Such a path is dropped and logged.
-static bool vrBadVertices(const NVGvertex* v, int n, const char* what)
-{
-	const float limit = 4.0f * static_cast<float>(std::max(gr_screen.max_w, gr_screen.max_h));
-	for (int i = 0; i < n; i++) {
-		if (!(std::fabs(v[i].x) <= limit && std::fabs(v[i].y) <= limit)) {
-			static int stamp = 0;
-			const int now = timer_get_milliseconds();
-			if (now - stamp > 2000) {
-				stamp = now;
-				mprintf(("VRHUD bad %s vertex: gauge %d vertex %d of %d at %.1f,%.1f (limit %.0f)\n", what, Gr_debug_hud_gauge, i, n, v[i].x, v[i].y, limit));
-			}
-			return true;
-		}
-	}
-	return false;
-}
-
 void vertexSet(NVGvertex* vtx, float x, float y, float u, float v) {
 	vtx->x = x;
 	vtx->y = y;
@@ -341,18 +322,12 @@ void NanoVGRenderer::renderFill(NVGpaint* paint,
 			copy->fillOffset = static_cast<uint32_t>(offset);
 			copy->fillCount = static_cast<uint32_t>((size_t) path->nfill);
 			memcpy(&_vertices[offset], path->fill, sizeof(NVGvertex) * path->nfill);
-			if (vrBadVertices(path->fill, path->nfill, "fill")) {
-				copy->fillCount = 0;
-			}
 			offset += path->nfill;
 		}
 		if (path->nstroke > 0) {
 			copy->strokeOffset = static_cast<uint32_t>(offset);
 			copy->strokeCount = static_cast<uint32_t>((size_t) path->nstroke);
 			memcpy(&_vertices[offset], path->stroke, sizeof(NVGvertex) * path->nstroke);
-			if (vrBadVertices(path->stroke, path->nstroke, "stroke")) {
-				copy->strokeCount = 0;
-			}
 			offset += path->nstroke;
 		}
 	}
@@ -439,9 +414,6 @@ void NanoVGRenderer::renderStroke(NVGpaint* paint,
 			copy->strokeOffset = static_cast<uint32_t>(offset);
 			copy->strokeCount = static_cast<uint32_t>(path->nstroke);
 			memcpy(&_vertices[offset], path->stroke, sizeof(NVGvertex) * path->nstroke);
-			if (vrBadVertices(path->stroke, path->nstroke, "stroke")) {
-				copy->strokeCount = 0;
-			}
 			offset += path->nstroke;
 		}
 	}

@@ -11,6 +11,7 @@
 
 
 #include "asteroid/asteroid.h"
+#include "graphics/vr_settings.h"
 #include "cmdline/cmdline.h"
 #include "debris/debris.h"
 #include "freespace.h"	// for flFrametime
@@ -2488,7 +2489,7 @@ int object_targetable_in_reticle(object *target_objp)
 void hud_target_in_reticle_new()
 {
 	// VR: look-to-target - aim along the head's gaze instead of the ship's nose (FSO_VR_GAZE_TARGET=0 turns it off)
-	static const bool vr_gaze_target = !(getenv("FSO_VR_GAZE_TARGET") && atoi(getenv("FSO_VR_GAZE_TARGET")) == 0);
+	const bool vr_gaze_target = vrset::on(vrset::GAZE_TARGET);
 	const bool use_gaze = vr_gaze_target && openxr_enabled() && Openxr_gaze_valid;
 	const vec3d& ray_origin = use_gaze ? Openxr_gaze_pos : Eye_position;
 	const vec3d& ray_dir = use_gaze ? Openxr_gaze_dir : Player_obj->orient.vec.fvec;
@@ -2609,7 +2610,7 @@ void hud_target_in_reticle_new()
 void hud_target_in_reticle_old()
 {
 	// VR: look-to-target - aim along the head's gaze instead of the ship's nose (FSO_VR_GAZE_TARGET=0 turns it off)
-	static const bool vr_gaze_target = !(getenv("FSO_VR_GAZE_TARGET") && atoi(getenv("FSO_VR_GAZE_TARGET")) == 0);
+	const bool vr_gaze_target = vrset::on(vrset::GAZE_TARGET);
 	const bool use_gaze = vr_gaze_target && openxr_enabled() && Openxr_gaze_valid;
 	const vec3d& ray_origin = use_gaze ? Openxr_gaze_pos : Eye_position;
 	const vec3d& ray_dir = use_gaze ? Openxr_gaze_dir : Player_obj->orient.vec.fvec;

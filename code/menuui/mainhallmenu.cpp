@@ -8,6 +8,7 @@
  */
 
 #include <cstdlib>
+#include "graphics/vr_settings.h"
 #include <climits>
 
 #include "freespace.h"
@@ -846,6 +847,10 @@ void main_hall_do(float frametime)
 		case KEY_ENTER:
 			snazzy_action = SNAZZY_CLICKED;
 			break;
+		case KEY_F9:	// Diaspora port: VR settings screen
+			vr_settings_menu();
+			break;
+
 		case KEY_F3:
 			gamesnd_play_iface(InterfaceSounds::IFACE_MOUSE_CLICK);
 			gameseq_post_event(GS_EVENT_LAB);

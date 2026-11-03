@@ -9,6 +9,7 @@
 
 
 #include "autopilot/autopilot.h"
+#include "graphics/vr_settings.h"
 #include "camera/camera.h"
 #include "camera/photomode.h"
 #include "controlconfig/controlsconfig.h"
@@ -468,7 +469,7 @@ void do_view_slew()
 	// VR: the head already looks around, and a padlock view that swings the camera is disorienting in a headset. The
 	// padlock directions target instead (up: next closest hostile, down: closest attacker, right/left: next/previous
 	// ship), on press. FSO_VR_PADLOCK=1 keeps the padlock views.
-	if (openxr_enabled() && !(getenv("FSO_VR_PADLOCK") && atoi(getenv("FSO_VR_PADLOCK")) != 0)) {
+	if (openxr_enabled() && !vrset::on(vrset::PADLOCK)) {
 		static bool held[4] = { false, false, false, false };
 		const int dirs[4] = { PADLOCK_UP, PADLOCK_DOWN, PADLOCK_RIGHT, PADLOCK_LEFT };
 		const int actions[4] = { TARGET_NEXT_CLOSEST_HOSTILE, TARGET_CLOSEST_SHIP_ATTACKING_SELF, TARGET_NEXT, TARGET_PREV };

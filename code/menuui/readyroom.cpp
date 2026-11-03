@@ -218,6 +218,43 @@ static SCP_string sim_desc_key(const char* filename)
 	SCP_tolower(key);
 	return key;
 }
+
+// The generated Diaspora missions start their description with "[[Duration: ~25 min | Difficulty: Hard]]".
+// Returns the two values (empty when absent) and the description without that header.
+static void sim_split_meta(const SCP_string& desc, SCP_string& duration, SCP_string& difficulty, SCP_string& rest)
+{
+	duration.clear();
+	difficulty.clear();
+	rest = desc;
+	if (desc.compare(0, 2, "[[") != 0)
+		return;
+	auto end = desc.find("]]");
+	if (end == SCP_string::npos)
+		return;
+	SCP_string inner = desc.substr(2, end - 2);
+	rest = desc.substr(end + 2);
+	while (!rest.empty() && (rest[0] == '\n' || rest[0] == '\r' || rest[0] == ' '))
+		rest.erase(0, 1);
+	size_t pos = 0;
+	while (pos < inner.size()) {
+		auto bar = inner.find('|', pos);
+		SCP_string item = inner.substr(pos, bar == SCP_string::npos ? SCP_string::npos : bar - pos);
+		pos = (bar == SCP_string::npos) ? inner.size() : bar + 1;
+		auto colon = item.find(':');
+		if (colon == SCP_string::npos)
+			continue;
+		SCP_string key = item.substr(0, colon), val = item.substr(colon + 1);
+		while (!val.empty() && val[0] == ' ')
+			val.erase(0, 1);
+		while (!val.empty() && val.back() == ' ')
+			val.pop_back();
+		if (key.find("uration") != SCP_string::npos)
+			duration = val;
+		else if (key.find("ifficulty") != SCP_string::npos)
+			difficulty = val;
+	}
+}
+
 static int Standalone_mission_names_inited = 0;
 static int Campaign_mission_names_inited = 0;
 static int Num_standalone_missions;
@@ -1411,6 +1448,18 @@ void sim_room_do_frame(float  /*frametime*/)
 			gr_set_color_fast(&Color_text_normal);
 
 		strcpy_s(buf, sim_room_lines[line].name);
+		if (sim_room_lines[line].filename) {
+			auto meta_it = Sim_mission_desc.find(sim_desc_key(sim_room_lines[line].filename));
+			if (meta_it != Sim_mission_desc.end()) {
+				SCP_string dur, diff, rest;
+				sim_split_meta(meta_it->second, dur, diff, rest);
+				if (!dur.empty() || !diff.empty()) {
+					char tag[64];
+					snprintf(tag, sizeof(tag), "  (%s%s%s)", dur.c_str(), (!dur.empty() && !diff.empty()) ? ", " : "", diff.c_str());
+					strncat(buf, tag, sizeof(buf) - strlen(buf) - 1);
+				}
+			}
+		}
 		font::force_fit_string(buf, 255, list_x1 + list_w1 - sim_room_lines[line].x);
 		gr_printf_menu(sim_room_lines[line].x, y, "%s", buf);
 
@@ -1445,7 +1494,8 @@ void sim_room_do_frame(float  /*frametime*/)
 				// word wrap
 				SCP_vector<SCP_string> lines;
 				SCP_string current;
-				SCP_string text = it->second;
+				SCP_string meta_duration, meta_difficulty, text;
+				sim_split_meta(it->second, meta_duration, meta_difficulty, text);
 				std::replace(text.begin(), text.end(), '\n', ' ');
 				size_t pos = 0;
 				while (pos < text.size()) {
@@ -1472,6 +1522,13 @@ void sim_room_do_frame(float  /*frametime*/)
 					gr_printf_menu(box_x, desc_y, "%s", XSTR("Mission description", -1));
 					gr_set_color_fast(&Color_text_normal);
 					int y_line = desc_y + font_height + font_height / 2;
+					if (!meta_duration.empty() || !meta_difficulty.empty()) {
+						gr_set_color_fast(&Color_bright_white);
+						gr_printf_menu(box_x, y_line, "%s %s    %s %s", XSTR("Estimated duration:", -1), meta_duration.c_str(),
+							XSTR("Difficulty:", -1), meta_difficulty.c_str());
+						gr_set_color_fast(&Color_text_normal);
+						y_line += font_height + font_height / 2;
+					}
 					for (size_t n = 0; n < lines.size() && (int)n < max_lines; n++) {
 						if (y_line + font_height > list_y + list_h)
 							break;

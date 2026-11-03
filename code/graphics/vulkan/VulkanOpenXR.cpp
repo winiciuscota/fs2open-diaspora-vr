@@ -52,6 +52,7 @@ std::array<bool, 2> Xr_eye_acquired = {false, false};
 XrSwapchain Xr_hud_swapchain = XR_NULL_HANDLE;
 SCP_vector<XrSwapchainImageVulkan2KHR> Xr_hud_images;
 uint32_t Xr_hud_width = 0, Xr_hud_height = 0;
+uint32_t Xr_hud_mips = 1;	// mip levels of the HUD layer image
 bool Xr_hud_acquired = false;
 bool Xr_hud_ready = false;	// the HUD image was written for the frame being built
 
@@ -66,7 +67,7 @@ bool Xr_hud_ready = false;	// the HUD image was written for the frame being buil
  *
  * Must be called with no render pass active on the frame command buffer.
  */
-void blit_to_swapchain_image(VulkanRenderer* renderer, vk::Image dst, uint32_t dstWidth, uint32_t dstHeight)
+void blit_to_swapchain_image(VulkanRenderer* renderer, vk::Image dst, uint32_t dstWidth, uint32_t dstHeight, uint32_t mipLevels = 1)
 {
 	const vk::CommandBuffer cmd = renderer->getCurrentCommandBuffer();
 	const vk::Image composition = renderer->getCurrentCompositionImage();
@@ -92,6 +93,7 @@ void blit_to_swapchain_image(VulkanRenderer* renderer, vk::Image dst, uint32_t d
 	// eUndefined discards whatever the runtime last left in the image, which is
 	// exactly right: the blit overwrites every pixel of it.
 	preBarriers[1].image = dst;
+	preBarriers[1].levelCount = mipLevels;
 	preBarriers[1].oldLayout = vk::ImageLayout::eUndefined;
 	preBarriers[1].newLayout = vk::ImageLayout::eTransferDstOptimal;
 	preBarriers[1].srcStage = vk::PipelineStageFlagBits2::eNone;
@@ -126,10 +128,36 @@ void blit_to_swapchain_image(VulkanRenderer* renderer, vk::Image dst, uint32_t d
 		&blit,
 		vk::Filter::eLinear);
 
-	std::array<ImageBarrier2, 2> postBarriers;
+	// HUD layer: build the mip chain, so the runtime can sample a clean, filtered image when the layer covers fewer
+	// pixels than it has (thin HUD lines and text otherwise shimmer and look rough)
+	for (uint32_t level = 1; level < mipLevels; level++) {
+		ImageBarrier2 toSrc;
+		toSrc.image = dst;
+		toSrc.baseMipLevel = level - 1;
+		toSrc.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+		toSrc.newLayout = vk::ImageLayout::eTransferSrcOptimal;
+		toSrc.srcStage = vk::PipelineStageFlagBits2::eBlit;
+		toSrc.srcAccess = vk::AccessFlagBits2::eTransferWrite;
+		toSrc.dstStage = vk::PipelineStageFlagBits2::eBlit;
+		toSrc.dstAccess = vk::AccessFlagBits2::eTransferRead;
+		cmdImageBarriers(cmd, ArrayView<const ImageBarrier2>(&toSrc, 1));
+
+		vk::ImageBlit mipBlit;
+		mipBlit.srcSubresource = vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, level - 1, 0, 1);
+		mipBlit.dstSubresource = vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, level, 0, 1);
+		mipBlit.srcOffsets[1] = vk::Offset3D(static_cast<int32_t>(std::max(1u, dstWidth >> (level - 1))),
+			static_cast<int32_t>(std::max(1u, dstHeight >> (level - 1))), 1);
+		mipBlit.dstOffsets[1] = vk::Offset3D(static_cast<int32_t>(std::max(1u, dstWidth >> level)),
+			static_cast<int32_t>(std::max(1u, dstHeight >> level)), 1);
+		cmd.blitImage(dst, vk::ImageLayout::eTransferSrcOptimal, dst, vk::ImageLayout::eTransferDstOptimal, 1, &mipBlit, vk::Filter::eLinear);
+	}
+
+	std::array<ImageBarrier2, 3> postBarriers;
 	// Runtimes expect a released swapchain image in eColorAttachmentOptimal.
 	postBarriers[0].image = dst;
-	postBarriers[0].oldLayout = vk::ImageLayout::eTransferDstOptimal;
+	// with a mip chain every level but the last was left as a transfer source
+	postBarriers[0].levelCount = mipLevels > 1 ? mipLevels - 1 : 1;
+	postBarriers[0].oldLayout = mipLevels > 1 ? vk::ImageLayout::eTransferSrcOptimal : vk::ImageLayout::eTransferDstOptimal;
 	postBarriers[0].newLayout = vk::ImageLayout::eColorAttachmentOptimal;
 	postBarriers[0].srcStage = vk::PipelineStageFlagBits2::eBlit;
 	postBarriers[0].srcAccess = vk::AccessFlagBits2::eTransferWrite;
@@ -144,7 +172,15 @@ void blit_to_swapchain_image(VulkanRenderer* renderer, vk::Image dst, uint32_t d
 	postBarriers[1].dstStage = vk::PipelineStageFlagBits2::eFragmentShader;
 	postBarriers[1].dstAccess = vk::AccessFlagBits2::eShaderSampledRead;
 
-	cmdImageBarriers(cmd, ArrayView<const ImageBarrier2>(postBarriers.data(), postBarriers.size()));
+	size_t nPost = 2;
+	if (mipLevels > 1) {
+		postBarriers[2] = postBarriers[0];
+		postBarriers[2].baseMipLevel = mipLevels - 1;
+		postBarriers[2].levelCount = 1;
+		postBarriers[2].oldLayout = vk::ImageLayout::eTransferDstOptimal;
+		nPost = 3;
+	}
+	cmdImageBarriers(cmd, ArrayView<const ImageBarrier2>(postBarriers.data(), nPost));
 }
 
 /**
@@ -244,7 +280,7 @@ void hud_layer_end()
 		xrWaitSwapchainImage(Xr_hud_swapchain, &waitImageInfo);
 		Xr_hud_acquired = true;
 
-		blit_to_swapchain_image(renderer, vk::Image(Xr_hud_images[activeIndex].image), Xr_hud_width, Xr_hud_height);
+		blit_to_swapchain_image(renderer, vk::Image(Xr_hud_images[activeIndex].image), Xr_hud_width, Xr_hud_height, Xr_hud_mips);
 		Xr_hud_ready = true;
 	}
 
@@ -472,11 +508,9 @@ void end_frame(VulkanRenderer* renderer, bool stereo)
 	XrCompositionLayerQuad hudQuad{};
 	const XrCompositionLayerBaseHeader* layers[2] = { pLayer, nullptr };
 	uint32_t layerCount = 1;
-	// FSO_VR_HUD_HIDE=1: do not show the HUD layer at all (bisecting the green streaks: do they live in the HUD image or in the scene?)
-	static const bool hud_hide = getenv("FSO_VR_HUD_HIDE") != nullptr && atoi(getenv("FSO_VR_HUD_HIDE")) != 0;
 	// the Toggle HUD control (Shift+O by default) also hides the layer: nothing is drawn into it any more, but the transparent
 	// quad would still be submitted
-	if (stereo && Xr_hud_ready && !hud_hide && HUD_draw) {
+	if (stereo && Xr_hud_ready && HUD_draw) {
 		hudQuad = hud_quad_layer();
 		layers[layerCount++] = (const XrCompositionLayerBaseHeader*)&hudQuad;
 	}
@@ -590,16 +624,26 @@ bool vulkan_openxr_acquire_swapchain_buffers()
 			XR_TYPE_SWAPCHAIN_CREATE_INFO,
 			nullptr,
 			0,
-			XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+			XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
 			xr_swapchains[0]->format,
 			1,
 			extent.width,
 			extent.height,
 			1,
 			1,
-			1
+			4
 		};
-		if (xrCreateSwapchain(xr_session, &hudInfo, &Xr_hud_swapchain) != XR_SUCCESS) {
+		Xr_hud_mips = 4;
+		XrResult hudResult = xrCreateSwapchain(xr_session, &hudInfo, &Xr_hud_swapchain);
+		if (hudResult != XR_SUCCESS) {
+			// the runtime does not take a mip chain: plain single level layer
+			hudInfo.usageFlags = XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+			hudInfo.mipCount = 1;
+			Xr_hud_mips = 1;
+			Xr_hud_swapchain = XR_NULL_HANDLE;
+			hudResult = xrCreateSwapchain(xr_session, &hudInfo, &Xr_hud_swapchain);
+		}
+		if (hudResult != XR_SUCCESS) {
 			mprintf(("OpenXR: could not create the HUD layer swapchain, the HUD is drawn into the eye images\n"));
 			Xr_hud_swapchain = XR_NULL_HANDLE;
 		} else {
@@ -612,7 +656,7 @@ bool vulkan_openxr_acquire_swapchain_buffers()
 			Xr_hud_height = extent.height;
 			Openxr_hud_layer_begin_fn = hud_layer_begin;
 			Openxr_hud_layer_end_fn = hud_layer_end;
-			mprintf(("OpenXR: HUD layer %ux%u, %u images\n", Xr_hud_width, Xr_hud_height, hudCount));
+			mprintf(("OpenXR: HUD layer %ux%u, %u images, %u mip levels\n", Xr_hud_width, Xr_hud_height, hudCount, Xr_hud_mips));
 		}
 	}
 
