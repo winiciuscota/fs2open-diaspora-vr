@@ -7,6 +7,8 @@
 #include "VulkanDescriptorManager.h"
 #include "graphics/util/uniform_structs.h"
 #include "graphics/post_processing.h"
+#include "graphics/openxr.h"
+#include <cstdlib>
 #include "graphics/grinternal.h"
 #include "graphics/2d.h"
 #include "io/timer.h"
@@ -512,6 +514,15 @@ void VulkanLDR::executeLightshafts(vk::CommandBuffer cmd)
 
 	if (Game_subspace_effect || !gr_sunglare_enabled() || !gr_lightshafts_enabled()) {
 		return;
+	}
+
+	// VR: the radial blur smears the bright HUD pixels into long streaks pointing at the sun (green bands across the view);
+	// FSO_VR_SHAFTS=1 turns it back on
+	if (openxr_enabled()) {
+		static const bool shafts = getenv("FSO_VR_SHAFTS") != nullptr && atoi(getenv("FSO_VR_SHAFTS")) != 0;
+		if (!shafts) {
+			return;
+		}
 	}
 
 	// Find a global light with glare facing the camera
