@@ -806,6 +806,10 @@ bool openxr_enabled() {
 	return openxr_initialized && openxr_recieve;
 }
 
+bool openxr_stereo_frame_open() {
+	return xr_stage == OpenXRFBStage::FIRST;
+}
+
 bool openxr_requested() {
 	return openxr_req;
 }
@@ -1005,6 +1009,7 @@ void openxr_poll() {}
 void openxr_start_mission() {}
 
 bool openxr_enabled() { return false; }
+bool openxr_stereo_frame_open() { return false; }
 
 bool openxr_requested() { return false; }
 

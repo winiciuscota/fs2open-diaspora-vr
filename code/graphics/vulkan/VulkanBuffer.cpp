@@ -539,15 +539,17 @@ void VulkanBufferManager::updateBufferData(gr_buffer_handle handle, size_t size,
 			bufferObj.frameAllocOffset = offset;
 			bufferObj.dataSize = size;
 			bufferObj.frameAllocFrame = m_currentFrame;
+			bufferObj.frameAllocNumber = m_currentFrameNumber;
 		} else {
 			// Pattern B: pre-alloc for offset writes (null data)
-			if (bufferObj.frameAllocFrame != m_currentFrame || size > bufferObj.dataSize) {
+			if (bufferObj.frameAllocNumber != m_currentFrameNumber || size > bufferObj.dataSize) {
 				// First allocation this frame, or need more space
 				size_t offset = bumpAllocate(size);
 				bufferObj.frameAllocBuffer = alloc.buffer;
 				bufferObj.frameAllocOffset = offset;
 				bufferObj.dataSize = size;
 				bufferObj.frameAllocFrame = m_currentFrame;
+			bufferObj.frameAllocNumber = m_currentFrameNumber;
 			}
 			// Otherwise: same frame and size fits — keep current allocation
 		}
@@ -604,7 +606,7 @@ void VulkanBufferManager::updateBufferDataOffset(gr_buffer_handle handle, size_t
 		// Auto-allocate if not yet allocated this frame.  This happens when
 		// the caller skips updateBufferData (e.g. gr_add_to_immediate_buffer
 		// when the data fits the existing buffer size).
-		if (bufferObj.frameAllocFrame != m_currentFrame) {
+		if (bufferObj.frameAllocNumber != m_currentFrameNumber) {
 			size_t allocSize = std::max(bufferObj.dataSize, offset + size);
 			Assert(allocSize > 0);
 			auto& fa = m_frameAllocs[m_currentFrame];
@@ -613,6 +615,7 @@ void VulkanBufferManager::updateBufferDataOffset(gr_buffer_handle handle, size_t
 			bufferObj.frameAllocOffset = allocOffset;
 			bufferObj.dataSize = allocSize;
 			bufferObj.frameAllocFrame = m_currentFrame;
+			bufferObj.frameAllocNumber = m_currentFrameNumber;
 		}
 
 		Assert(offset + size <= bufferObj.dataSize);

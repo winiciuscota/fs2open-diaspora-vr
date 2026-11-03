@@ -64,6 +64,7 @@ struct VulkanBufferObject {
 	vk::Buffer frameAllocBuffer;       // VkBuffer at upload time (may be old allocator buffer after growth)
 	size_t frameAllocOffset = 0;       // Byte offset within the frame allocator buffer
 	uint32_t frameAllocFrame = UINT32_MAX; // Frame index when last allocated
+	uint64_t frameAllocNumber = UINT64_MAX; // absolute frame number of that allocation (the slot repeats every MAX_FRAMES_IN_FLIGHT frames)
 
 	bool isStreaming() const {
 		return usage == BufferUsageHint::Streaming || usage == BufferUsageHint::Dynamic;

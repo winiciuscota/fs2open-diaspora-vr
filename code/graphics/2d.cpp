@@ -3324,7 +3324,12 @@ void gr_flip(bool execute_scripting)
 	// In Vulkan (deferred submission), the GPU reads the final buffer state at submit time,
 	// so overwrites here silently corrupt earlier draws. OpenGL's immediate execution hides
 	// this, but it is still logically wrong for any deferred-submission backend.
-	gr_reset_immediate_buffer();
+	// VR: a stereo frame spans two gr_flip() calls and is only submitted at the second one. Resetting here after the
+	// left eye let the right eye overwrite the immediate vertex data the HUD layer and the left eye still referenced
+	// (worst when the sun glow and lens flare added right-eye 2D draws): green streaks across the VR HUD.
+	if (!openxr_stereo_frame_open()) {
+		gr_reset_immediate_buffer();
+	}
 
 	// Do per frame operations on the matrix state
 	gr_matrix_on_frame();

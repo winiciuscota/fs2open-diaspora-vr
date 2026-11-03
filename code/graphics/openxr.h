@@ -50,6 +50,8 @@ void openxr_start_mission();
  * @brief Polls whether OpenXR is active and can render
  */
 bool openxr_enabled();
+// true between the left and the right eye of a stereo frame: the first gr_flip() of the pair submits nothing
+bool openxr_stereo_frame_open();
 // position of the pointing controller on the menu plane as seen from the head, in 0..1 screen units (may lie outside the screen)
 bool openxr_get_pointer_hand(float* u, float* v);
 
