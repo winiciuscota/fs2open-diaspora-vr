@@ -472,7 +472,10 @@ void end_frame(VulkanRenderer* renderer, bool stereo)
 	uint32_t layerCount = 1;
 	// FSO_VR_HUD_HIDE=1: do not show the HUD layer at all (bisecting the green streaks: do they live in the HUD image or in the scene?)
 	static const bool hud_hide = getenv("FSO_VR_HUD_HIDE") != nullptr && atoi(getenv("FSO_VR_HUD_HIDE")) != 0;
-	if (stereo && Xr_hud_ready && !hud_hide) {
+	// the Toggle HUD control (Shift+O by default) also hides the layer: nothing is drawn into it any more, but the transparent
+	// quad would still be submitted
+	extern int HUD_draw;
+	if (stereo && Xr_hud_ready && !hud_hide && HUD_draw) {
 		hudQuad = hud_quad_layer();
 		layers[layerCount++] = (const XrCompositionLayerBaseHeader*)&hudQuad;
 	}
