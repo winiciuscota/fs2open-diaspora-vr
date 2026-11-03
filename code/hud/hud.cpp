@@ -2104,8 +2104,8 @@ static void vr_hud_lift_begin(HudGauge* gauge)
 	const int type = gauge->getObjectType();
 
 	// the HUD is laid out for a tall canvas: squeeze the vertical spread of the panels towards the middle
-	// (FSO_VR_HUD_HEIGHT, default 0.5 = half the height; 1 keeps the layout), the gauges keep their size
-	static const float height_f = getenv("FSO_VR_HUD_HEIGHT") ? std::min(1.0f, std::max(0.2f, static_cast<float>(atof(getenv("FSO_VR_HUD_HEIGHT"))))) : 0.5f;
+	// (FSO_VR_HUD_HEIGHT, default 1 = off; 0.5 = half the height), the gauges keep their size
+	static const float height_f = getenv("FSO_VR_HUD_HEIGHT") ? std::min(1.0f, std::max(0.2f, static_cast<float>(atof(getenv("FSO_VR_HUD_HEIGHT"))))) : 1.0f;
 	int comp_y = 0;
 	if (height_f < 1.0f && (x != 0 || y != 0) && !vr_hud_world_aligned(type)) {
 		comp_y = fl2i((i2fl(h) * 0.5f - i2fl(y)) * (1.0f - height_f));
