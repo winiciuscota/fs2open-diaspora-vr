@@ -9,6 +9,7 @@
 
 #include <SDL3/SDL.h>
 
+#include "controlconfig/controlsconfig.h"
 #include "gamesequence/gamesequence.h"
 #include "io/joy.h"
 #include "io/key.h"
@@ -28,6 +29,18 @@ bool enabled()
 		on = (v != nullptr && atoi(v) == 0 && v[0] == '0') ? 0 : 1;
 	}
 	return on == 1;
+}
+
+// joystick button bound to a control action (hat positions are 128 and up, not buttons), or the default
+int bound_joy_button(int action, int fallback)
+{
+	if (action < 0 || static_cast<size_t>(action) >= Control_config.size())
+		return fallback;
+	for (const CC_bind* b : { &Control_config[action].first, &Control_config[action].second }) {
+		if (b->get_cid() >= CID_JOY0 && b->get_cid() < CID_JOY_MAX && b->get_btn() >= 0 && b->get_btn() < 128)
+			return b->get_btn();
+	}
+	return fallback;
 }
 
 io::joystick::Joystick* pick_stick()
@@ -127,25 +140,28 @@ void joy_menu_update(int gamestate)
 		my = ny;
 	}
 
-	// any stick button (the trigger is not always button 0) = left click; the button numbers go to the log
+	// the button bound to "fire primary" clicks, the one bound to "fire secondary" is Escape (the X52 defaults are 0 and 1)
 	static io::joystick::Joystick* logged = nullptr;
+	static int btn_click = 0, btn_esc = 1;
 	if (logged != stick) {
 		logged = stick;
-		mprintf(("Joystick menu: using '%s' (%d axes, %d buttons, %d hats)\n", stick->getName().c_str(), stick->numAxes(), stick->numButtons(), stick->numHats()));
+		btn_click = bound_joy_button(FIRE_PRIMARY, 0);
+		btn_esc = bound_joy_button(FIRE_SECONDARY, 1);
+		mprintf(("Joystick menu: using '%s' (%d axes, %d buttons, %d hats), click = button %d, escape = button %d\n", stick->getName().c_str(),
+			stick->numAxes(), stick->numButtons(), stick->numHats(), btn_click, btn_esc));
 	}
-	bool trig = false;
-	for (int b = 0; b < stick->numButtons(); ++b) {
-		if (stick->isButtonDown(b)) {
-			trig = true;
-			if (!left_down)
-				mprintf(("Joystick menu: button %d pressed\n", b));
-			break;
-		}
-	}
+	static bool esc_down = false;
+	const bool trig = btn_click >= 0 && btn_click < stick->numButtons() && stick->isButtonDown(btn_click);
+	const bool esc = btn_esc >= 0 && btn_esc < stick->numButtons() && stick->isButtonDown(btn_esc);
 	if (trig != left_down) {
 		left_down = trig;
 		click(window, SDL_BUTTON_LEFT, trig, mx, my);
 	}
+	if (esc && !esc_down) {
+		key_mark(KEY_ESC, 1, 0);
+		key_pressed = (key_pressed == 0) ? KEY_ESC : key_pressed;
+	}
+	esc_down = esc;
 
 	// hat = arrow keys, with key repeat
 	int want = 0;
