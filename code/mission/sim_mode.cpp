@@ -131,7 +131,7 @@ void sim_update(int state)
 			_exit(3);
 		break;
 	case GS_STATE_GAME_PLAY:
-		Player_use_ai = true;
+		Player_use_ai = (getenv("FSO_SIM_IDLE") == nullptr);	// FSO_SIM_IDLE: the player sits still
 		apply_multipliers();
 		if (f2fl(Missiontime) > env_float("FSO_SIM_LIMIT", 2400.0f))
 			finish("timeout");
