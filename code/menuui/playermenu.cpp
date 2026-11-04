@@ -400,6 +400,9 @@ void player_select_show_startup_warnings()
 		startup_issues_logged = true;
 		mprintf(("Startup issues: %d warnings, %d errors\n", Global_warning_count, Global_error_count));
 	}
+	if (Cmdline_sim)
+		return;		// headless simulation: no popups
+
 	if ((Global_warning_count + Global_error_count > 40) && !Startup_warning_dialog_displayed) {
 		char text[512];
 		sprintf(text, XSTR ("Warning!\n\nThe currently active mod has generated %d warnings and/or errors during program startup.  These could have been caused by anything from incorrectly formatted table files to corrupt models.\n\nWhile FreeSpace Open will attempt to compensate for these issues, it cannot guarantee a trouble-free gameplay experience.\n\nPlease contact the authors of the mod for assistance.", 1640), Global_warning_count + Global_error_count);

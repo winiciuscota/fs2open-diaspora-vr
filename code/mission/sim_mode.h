@@ -4,3 +4,4 @@
 // writes a JSON result to $FSO_SIM_OUT when it ends (tools/sim_missions.py). Environment: FSO_SIM_LIMIT (mission seconds,
 // default 2400), FSO_SIM_HP (hull multiplier for the player ship and its wing), FSO_SIM_PROTECT (hull multiplier for escort ships).
 void sim_update(int gamestate);
+void sim_mission_over();	// the mission ended (debrief event): writes the result and exits when -sim is on

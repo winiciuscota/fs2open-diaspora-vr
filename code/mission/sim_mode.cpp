@@ -115,6 +115,12 @@ void write_report(const char* result)
 
 extern bool Player_use_ai;
 
+void sim_mission_over()
+{
+	if (Cmdline_sim)
+		finish(mission_evaluate_primary_goals() == PRIMARY_GOALS_COMPLETE ? "win" : "fail");
+}
+
 void sim_update(int state)
 {
 	if (!Cmdline_sim)

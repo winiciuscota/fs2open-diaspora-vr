@@ -5355,6 +5355,7 @@ void game_process_event( int current_state, int event )
 			break;
 
 		case GS_EVENT_DEBRIEF:
+			sim_mission_over();		// -sim: report and exit, the debriefing screens need the UI
 			// did we end the campaign in the main freespace 2 single player campaign?
 			// (specifically, did we successfully jump out when the supernova was in progress
 			// and the campaign was ending?)
@@ -6338,6 +6339,14 @@ void game_enter_state( int old_state, int new_state )
 				// this should put us into a new state on failure!
 				if (!game_start_mission())
 					break;
+			}
+
+			// -sim: no briefing screens, pick the default loadout and fly
+			if (Cmdline_sim && (Game_mode & GM_NORMAL)) {
+				common_select_init(true);
+				if (commit_pressed(true) == commit_pressed_status::SUCCESS)
+					break;
+				_exit(5);
 			}
 
 			// maybe play a movie before the mission
