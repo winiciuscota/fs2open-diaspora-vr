@@ -651,7 +651,7 @@ static void prop_model_change(int n, int prop_type)
 
 	if ( sip->num_detail_levels != pm->n_detail_levels )
 	{
-		if ( !Is_standalone )
+		if ( !(Is_standalone || Cmdline_sim) )
 		{
 			// just log to file for standalone servers
 			Warning(LOCATION, "For prop '%s', detail level\nmismatch. Table has %d,\nPOF has %d.", sip->name.c_str(), sip->num_detail_levels, pm->n_detail_levels );

@@ -2722,7 +2722,7 @@ void asteroid_init()
 
 	if (!Asteroid_impact_explosion_ani.isValid()) {
 		// this will always be missing on a standalone
-		if ( !Is_standalone ) {
+		if ( !(Is_standalone || Cmdline_sim) ) {
 			Error(LOCATION, "Missing valid asteroid impact explosion definition in asteroid.tbl!");
 		}
 	}
