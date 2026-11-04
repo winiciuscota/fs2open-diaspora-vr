@@ -6288,6 +6288,14 @@ void game_enter_state( int old_state, int new_state )
 				Game_mode = GM_NORMAL;
 			}
 
+			// -sim: straight to the mission, the main hall needs the UI
+			if (Cmdline_sim && Cmdline_start_mission) {
+				strcpy_s(Game_current_mission_filename, Cmdline_start_mission);
+				Cmdline_start_mission = nullptr;
+				gameseq_post_event(GS_EVENT_START_GAME);
+				break;
+			}
+
 			// determine which ship this guy is currently based on
 			// if we have just selected a pilot, allow falling back when the current campaign isn't available
 			const auto result = mission_load_up_campaign(pilot_just_committed);
