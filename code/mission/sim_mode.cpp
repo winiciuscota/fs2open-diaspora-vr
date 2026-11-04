@@ -68,7 +68,7 @@ void write_report(const char* result)
 	if (f == nullptr)
 		return;
 	fprintf(f, "{\"mission\": ");
-	json_str(f, The_mission.name);
+	json_str(f, The_mission.name.c_str());
 	fprintf(f, ", \"result\": \"%s\", \"time\": %.1f, \"hp\": %.2f, \"protect\": %.2f,\n \"goals\": [", result, f2fl(Missiontime),
 		env_float("FSO_SIM_HP", 1.0f), env_float("FSO_SIM_PROTECT", 1.0f));
 	bool first = true;
