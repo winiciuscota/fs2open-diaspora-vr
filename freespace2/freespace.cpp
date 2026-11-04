@@ -6512,13 +6512,13 @@ void game_enter_state( int old_state, int new_state )
 			// Goober5000 - people may not have realized that pausing causes this state to be re-entered
 			if ((old_state != GS_STATE_GAME_PAUSED) && (old_state != GS_STATE_MULTI_PAUSED) && (old_state != GS_STATE_MAIN_MENU))
 			{
-				if ( !Is_standalone )
+				if ( !(Is_standalone || Cmdline_sim) )
 					radar_mission_init();
 
 				//Set the current hud
 				set_current_hud();
 
-				if ( !Is_standalone ) {
+				if ( !(Is_standalone || Cmdline_sim) ) {
 					ship_init_cockpit_displays(Player_ship);
 				}
 			}
