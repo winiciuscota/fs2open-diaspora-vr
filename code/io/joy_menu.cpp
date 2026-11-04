@@ -1,5 +1,7 @@
 #include "io/joy_menu.h"
 
+#include "globalincs/pstypes.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -125,16 +127,24 @@ void joy_menu_update(int gamestate)
 		my = ny;
 	}
 
-	// trigger = left click, second button = right click
-	const bool trig = stick->numButtons() > 0 && stick->isButtonDown(0);
-	const bool second = stick->numButtons() > 1 && stick->isButtonDown(1);
+	// any stick button (the trigger is not always button 0) = left click; the button numbers go to the log
+	static io::joystick::Joystick* logged = nullptr;
+	if (logged != stick) {
+		logged = stick;
+		mprintf(("Joystick menu: using '%s' (%d axes, %d buttons, %d hats)\n", stick->getName().c_str(), stick->numAxes(), stick->numButtons(), stick->numHats()));
+	}
+	bool trig = false;
+	for (int b = 0; b < stick->numButtons(); ++b) {
+		if (stick->isButtonDown(b)) {
+			trig = true;
+			if (!left_down)
+				mprintf(("Joystick menu: button %d pressed\n", b));
+			break;
+		}
+	}
 	if (trig != left_down) {
 		left_down = trig;
 		click(window, SDL_BUTTON_LEFT, trig, mx, my);
-	}
-	if (second != right_down) {
-		right_down = second;
-		click(window, SDL_BUTTON_RIGHT, second, mx, my);
 	}
 
 	// hat = arrow keys, with key repeat
