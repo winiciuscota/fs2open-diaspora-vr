@@ -9,6 +9,7 @@
 
 
 
+#include "cmdline/cmdline.h"
 #include "asteroid/asteroid.h"
 #include "debugconsole/console.h"
 #include "fireball/fireballs.h"
@@ -571,7 +572,7 @@ void asteroid_load(int asteroid_info_index, int asteroid_subtype)
 		
 		if ( asip->num_detail_levels != pm->n_detail_levels )
 		{
-			if ( !Is_standalone )
+			if ( !(Is_standalone || Cmdline_sim) )
 			{
 				// just log to file for standalone servers
 				Warning(LOCATION, "For asteroid '%s', detail level mismatch (POF has %d, table has %d)", asip->name, pm->n_detail_levels, asip->num_detail_levels );

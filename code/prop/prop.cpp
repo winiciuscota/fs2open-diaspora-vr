@@ -1,3 +1,4 @@
+#include "cmdline/cmdline.h"
 #include "prop.h"
 
 #include "asteroid/asteroid.h"
@@ -479,7 +480,7 @@ int prop_create(const matrix* orient, const vec3d* pos, int prop_type, const cha
 	polymodel* pm = model_get(pip->model_num);
 
 	if (pip->num_detail_levels != pm->n_detail_levels) {
-		if (!Is_standalone) {
+		if (!(Is_standalone || Cmdline_sim)) {
 			// just log to file for standalone servers
 			Warning(LOCATION,
 				"For prop '%s', detail level\nmismatch. Table has %d,\nPOF has %d.",

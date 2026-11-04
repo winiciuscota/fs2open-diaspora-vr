@@ -3515,7 +3515,7 @@ void stuff_loadout_list(SCP_vector<loadout_row> &list, ParseLookupType lookup_ty
 			}
 			else if ((lookup_type == ParseLookupType::MISSION_LOADOUT_WEAPON_LIST) && (!(Weapon_info[buf->index].wi_flags[Weapon::Info_Flags::Player_allowed])) ) {
 				nprintf(("Warning",  "Warning: Weapon type %s found in loadout of mission file. This class is not marked as a player allowed weapon...skipping\n", str.c_str()));
-				if ( !Is_standalone )
+				if ( !(Is_standalone || Cmdline_sim) )
 					error_display(0, "Weapon type \"%s\" found in loadout of mission file. This class is not marked as a player allowed weapon...skipping", str.c_str());
 				skip_this_entry = true;
 			}
