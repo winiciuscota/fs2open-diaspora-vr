@@ -2239,7 +2239,7 @@ bool gr_init(std::unique_ptr<os::GraphicsOperations>&& graphicsOps, GraphicsAPI 
 	}
 
 	// if we are in standalone mode then just use special defaults
-	if (Is_standalone) {
+	if (Is_standalone || Cmdline_sim) {
 		mode = GraphicsAPI::Stub;
 		width = 640;
 		height = 480;

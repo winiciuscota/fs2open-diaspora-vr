@@ -11,6 +11,7 @@
 
 #include "globalincs/pstypes.h"
 #include "io/timer.h"
+#include "cmdline/cmdline.h"
 #include "graphics/2d.h"
 #include "globalincs/alphacolors.h"
 
@@ -43,9 +44,14 @@ static uint64_t Timestamp_microseconds_at_mission_start = 0;
 static uint64_t timestamp_get_raw(bool start_frame = false);
 
 
+static uint64_t Timer_sim_counter = 0;
+
 static uint64_t get_performance_counter()
 {
 	Assertion(Timer_inited, "This function can only be used when the timer system is initialized!");
+
+	if (Cmdline_sim)
+		return Timer_sim_counter;
 
 	auto counter = SDL_GetPerformanceCounter();
 
@@ -79,6 +85,10 @@ void timer_init()
 
 void timer_start_frame()
 {
+	// -sim: the clock is virtual, every frame is exactly 1/20 s so a mission runs as fast as the CPU allows
+	if (Cmdline_sim)
+		Timer_sim_counter += Timer_perf_counter_freq / 20;
+
 	// take a snapshot of the raw timestamp at the beginning of the frame
 	timestamp_get_raw(true);
 }

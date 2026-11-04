@@ -85,6 +85,7 @@
 #include "iff_defs/iff_defs.h"
 #include "io/cursor.h"
 #include "io/joy_menu.h"
+#include "mission/sim_mode.h"
 #include "io/joy.h"
 #include "io/joy_ff.h"
 #include "io/key.h"
@@ -6868,6 +6869,7 @@ void game_do_state(int state)
 	// legal to set the should skip state anywhere in this function
 	game_do_state_common(state); // do stuff that may need to be done regardless of state
 
+	sim_update(state);
 	joy_menu_update(state);	// flight stick drives the menus (Diaspora port)
 
 	if (Game_do_state_should_skip) {

@@ -268,6 +268,7 @@ Flag exe_params[] =
 	{ "-verify_vps",		"Spew VP CRCs to vp_crcs.txt",				true,	0,									EASY_DEFAULT,					"Dev Tool",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-verify_vps", },
 	{ "-reparse_mainhall",	"Reparse mainhall.tbl when loading halls",	false,	0,									EASY_DEFAULT,					"Dev Tool",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-reparse_mainhall", },
 	{ "-noninteractive",	"Disables interactive dialogs",				true,	0,									EASY_DEFAULT,					"Dev Tool",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-noninteractive", },
+	{ "-sim",				"Headless AI-flown mission simulation",		true,	0,									EASY_DEFAULT,					"Dev Tool",		"", },
 	{ "-benchmark_mode",	"Puts the game into benchmark mode",		true,	0,									EASY_DEFAULT,					"Dev Tool",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-benchmark_mode", },
 	{ "-profile_frame_time","Profile frame time",						true,	0,									EASY_DEFAULT,					"Dev Tool",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-profile_frame_time", },
 	{ "-profile_write_file", "Write profiling information to file",		true,	0,									EASY_DEFAULT,					"Dev Tool",		"http://www.hard-light.net/wiki/index.php/Command-Line_Reference#-profile_write_file", },
@@ -522,6 +523,7 @@ cmdline_parm reparse_mainhall_arg("-reparse_mainhall", NULL, AT_NONE); //Cmdline
 cmdline_parm frame_profile_write_file("-profile_write_file", NULL, AT_NONE); // Cmdline_profile_write_file
 cmdline_parm no_unfocused_pause_arg("-no_unfocused_pause", NULL, AT_NONE); //Cmdline_no_unfocus_pause
 cmdline_parm retail_time_compression_range_arg("-orig_speedx_range", NULL, AT_NONE); //Cmdline_retail_time_compression_range
+cmdline_parm sim_arg("-sim", NULL, AT_NONE); //Cmdline_sim
 cmdline_parm benchmark_mode_arg("-benchmark_mode", NULL, AT_NONE); //Cmdline_benchmark_mode
 cmdline_parm pilot_arg("-pilot", nullptr, AT_STRING); //Cmdline_pilot
 cmdline_parm noninteractive_arg("-noninteractive", NULL, AT_NONE); //Cmdline_noninteractive
@@ -565,6 +567,7 @@ bool Cmdline_profile_write_file = false;
 bool Cmdline_no_unfocus_pause = false;
 bool Cmdline_retail_time_compression_range = false;
 bool Cmdline_benchmark_mode = false;
+bool Cmdline_sim = false;
 const char *Cmdline_pilot = nullptr;
 bool Cmdline_noninteractive = false;
 bool Cmdline_json_profiling = false;
@@ -2373,6 +2376,12 @@ bool SetCmdlineParams()
 		Cmdline_retail_time_compression_range = true;
 	}
 	
+	if (sim_arg.found())
+	{
+		Cmdline_sim = true;
+		Cmdline_NoFPSCap = true;
+	}
+
 	if (benchmark_mode_arg.found())
 	{
 		Cmdline_benchmark_mode = true;

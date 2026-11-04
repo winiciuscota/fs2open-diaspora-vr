@@ -911,6 +911,8 @@ add_file_folder("Mission"
 	mission/missionmessage.cpp
 	mission/missionmessage.h
 	mission/missionparse.cpp
+	mission/sim_mode.cpp
+	mission/sim_mode.h
 	mission/missionparse.h
 	mission/missiontraining.cpp
 	mission/missiontraining.h
