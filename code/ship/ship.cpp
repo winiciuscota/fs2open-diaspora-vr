@@ -2212,7 +2212,7 @@ static ::util::UniformRange<T_range> parse_ship_particle_random_range(const char
 particle::ParticleEffectHandle create_ship_legacy_particle_effect(LegacyShipParticleType type, float range, int bitmap, ::util::UniformFloatRange particle_num, ::util::UniformFloatRange radius, ::util::UniformFloatRange lifetime, ::util::UniformFloatRange velocity, float normal_variance, bool useNormal, float velocityInherit)
 {
 	// this is always invalid on standalone so just bail early
-	if (Is_standalone) {
+	if ((Is_standalone || Cmdline_sim)) {
 		return particle::ParticleEffectHandle::invalid();
 	}
 
@@ -11458,7 +11458,7 @@ int ship_create(matrix* orient, vec3d* pos, int ship_type, const char* ship_name
 
 	if ( sip->num_detail_levels != pm->n_detail_levels )
 	{
-		if ( !Is_standalone )
+		if ( !(Is_standalone || Cmdline_sim) )
 		{
 			// just log to file for standalone servers
 			Warning(LOCATION, "For ship '%s', detail level\nmismatch. Table has %d,\nPOF has %d.", sip->name, sip->num_detail_levels, pm->n_detail_levels );
@@ -11715,7 +11715,7 @@ static void ship_model_change(int n, int ship_type)
 
 	if ( sip->num_detail_levels != pm->n_detail_levels )
 	{
-		if ( !Is_standalone )
+		if ( !(Is_standalone || Cmdline_sim) )
 		{
 			// just log to file for standalone servers
 			Warning(LOCATION, "For ship '%s', detail level\nmismatch. Table has %d,\nPOF has %d.", sip->name, sip->num_detail_levels, pm->n_detail_levels );

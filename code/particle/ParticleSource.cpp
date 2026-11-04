@@ -1,4 +1,5 @@
 #include <math/bitarray.h>
+#include "cmdline/cmdline.h"
 #include "freespace.h"
 #include "particle/ParticleSource.h"
 #include "particle/ParticleEffect.h"
@@ -29,7 +30,7 @@ bool ParticleSource::isValid() const {
 }
 
 void ParticleSource::finishCreation() {
-	if (Is_standalone)
+	if ((Is_standalone || Cmdline_sim))
 		return;
 
 	Assertion(isValid(), "Cannot create a ParticleSource that is not valid!");

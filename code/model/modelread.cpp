@@ -1131,7 +1131,7 @@ void create_family_tree(polymodel *obj)
 
 void create_vertex_buffer(polymodel *pm, const model_read_deferred_tasks& deferredTasks)
 {
-	if (Is_standalone) {
+	if ((Is_standalone || Cmdline_sim)) {
 		return;
 	}
 

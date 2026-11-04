@@ -13,6 +13,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define BMPMAN_INTERNAL
 
+#include "cmdline/cmdline.h"
 #include "globalincs/pstypes.h"
 #include "anim/animplay.h"
 #include "anim/packunpack.h"
@@ -659,7 +660,7 @@ void bm_convert_format(bitmap *bmp, uint flags) {
 	if (!(flags & BMP_AABITMAP) && (bmp->bpp == 24))
 		return;
 
-	if (Is_standalone) {
+	if (Is_standalone || Cmdline_sim) {
 		return;
 	} else {
 		if(!(flags & BMP_AABITMAP))
@@ -1259,7 +1260,7 @@ int bm_load(const char *real_filename, int dir_type) {
 
 	// If we are standalone server keep replacing the 'right_bracket' (right side help bracket) as the filename
 	// should keep the game happy while loading only single pcx file which the needs to be present in any case
-	if (Is_standalone) {
+	if (Is_standalone || Cmdline_sim) {
 		char standalone_filename[MAX_FILENAME_LEN] = "right_bracket";
 		strcpy_s(filename, standalone_filename);
 		dir_type = CF_TYPE_INTERFACE;
@@ -1584,7 +1585,7 @@ int bm_load_animation(const char *real_filename, int *nframes, int *fps, int *ke
 
 	// If we are standalone server keep replacing the 'cursorweb' (mouse cursor) as the filename
 	// should keep the game happy while loading only single ani file which the needs to be present in any case
-	if (Is_standalone) {
+	if (Is_standalone || Cmdline_sim) {
 		char standalone_filename[MAX_FILENAME_LEN] = "cursorweb";
 		strcpy_s(filename, standalone_filename);
 		dir_type = CF_TYPE_INTERFACE;
@@ -2000,7 +2001,7 @@ bitmap * bm_lock(int handle, int bpp, uint flags, bool nodebug) {
 		bpp = 8;
 
 	// if we're on a standalone server, aways for it to lock to 8 bits
-	if (Is_standalone) {
+	if (Is_standalone || Cmdline_sim) {
 		bpp = 8;
 		flags = 0;
 	}
@@ -2134,7 +2135,7 @@ void bm_lock_ani(int /*handle*/, bitmap_slot *bs, bitmap* /*bmp*/, int bpp, uint
 		bm->flags = 0;
 
 		// briefing editor in Fred2 uses aabitmaps (ani's) - force to 8 bit
-		bm->bpp = Is_standalone ? (ubyte)8 : bpp;
+		bm->bpp = (Is_standalone || Cmdline_sim) ? (ubyte)8 : bpp;
 
 		bm->data = (ptr_u)bm_malloc(first_frame + i, size);
 
@@ -2474,7 +2475,7 @@ void bm_lock_tga(int handle, bitmap_slot *bs, bitmap *bmp, int bpp, uint flags) 
 
 	bpp = be->bm.true_bpp;
 
-	if (Is_standalone) {
+	if (Is_standalone || Cmdline_sim) {
 		Assert(bpp == 8);
 	} else {
 		Assert((bpp == 16) || (bpp == 24) || (bpp == 32));

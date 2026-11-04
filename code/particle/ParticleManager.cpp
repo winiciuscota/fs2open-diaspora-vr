@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <memory>
 
+#include "cmdline/cmdline.h"
 #include "particle/ParticleEffect.h"
 
 #include "particle/ParticleManager.h"
@@ -75,7 +76,7 @@ ParticleEffectHandle ParticleManager::getEffectByName(const SCP_string& name)
 }
 
 void ParticleManager::doFrame(float) {
-	if (Is_standalone) {
+	if ((Is_standalone || Cmdline_sim)) {
 		return;
 	}
 
@@ -126,7 +127,7 @@ ParticleEffectHandle ParticleManager::addEffect(ParticleEffect&& effect)
 ParticleEffectHandle ParticleManager::addEffect(SCP_vector<ParticleEffect>&& effect)
 {
 	// we don't need this on standalone so remove the effect and return something invalid
-	if (Is_standalone) {
+	if ((Is_standalone || Cmdline_sim)) {
 		return ParticleEffectHandle::invalid();
 	}
 

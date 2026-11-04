@@ -9,6 +9,7 @@
 
 
 
+#include "cmdline/cmdline.h"
 #include "bmpman/bmpman.h"
 #include "decals/decals.h"
 #include "particle/particle.h"
@@ -87,7 +88,7 @@ namespace particle
 	// Reset everything between levels
 	void init()
 	{
-		if (Is_standalone)
+		if ((Is_standalone || Cmdline_sim))
 		{
 			Particles_enabled = 0;
 			return;

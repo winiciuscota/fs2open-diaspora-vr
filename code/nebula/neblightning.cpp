@@ -10,6 +10,7 @@
 
 
 
+#include "cmdline/cmdline.h"
 #include "debugconsole/console.h"
 #include "freespace.h"
 #include "gamesnd/gamesnd.h"
@@ -649,7 +650,7 @@ void nebl_process()
 	}
 
 	// standalones shouldn't be doing this either
-	if (Is_standalone) {
+	if ((Is_standalone || Cmdline_sim)) {
 		return;
 	}
 
