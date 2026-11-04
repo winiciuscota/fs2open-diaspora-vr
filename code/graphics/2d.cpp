@@ -26,6 +26,7 @@
 #include "debugconsole/console.h"
 #include "executor/global_executors.h"
 #include "graphics/openxr.h"
+#include "graphics/vr_settings.h"
 #include "graphics/paths/PathRenderer.h"
 #include "graphics/post_processing.h"
 #include "graphics/util/GPUMemoryHeap.h"
@@ -58,6 +59,7 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <climits>
 
 
@@ -2157,6 +2159,15 @@ bool gr_init(std::unique_ptr<os::GraphicsOperations>&& graphicsOps, GraphicsAPI 
 		if ( sscanf(Cmdline_res, "%dx%d", &tmp_width, &tmp_height) == 2 ) {
 			width = tmp_width;
 			height = tmp_height;
+		}
+	}
+
+	if (Cmdline_enable_vr) {
+		// render scale of the VR settings: a fraction of the resolution the launcher asked for
+		const float scale = vrset::get(vrset::RENDER_SCALE);
+		if (scale != 1.0f) {
+			width = std::max(640, static_cast<int>(lroundf(width * scale)) & ~1);
+			height = std::max(640, static_cast<int>(lroundf(height * scale)) & ~1);
 		}
 	}
 

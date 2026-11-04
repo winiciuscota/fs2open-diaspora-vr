@@ -7,6 +7,8 @@
 namespace vrset {
 
 enum Id {
+	GFX_PRESET,     // graphics preset: 0 low, 1 default (engine settings untouched), 2 high, 3 ultra; applies at start
+	RENDER_SCALE,   // multiplies the VR render resolution (-res); applies at start
 	HUD_DISTANCE,   // distance of the HUD layer in front of the cockpit (m)
 	HUD_ZOOM,       // size of the HUD layer
 	HUD_HEIGHT,     // < 1 squeezes the HUD panels towards the middle
@@ -31,6 +33,7 @@ struct Info {
 	const char* label;  // text in the settings screen
 	float def, min, max, step;
 	bool toggle;
+	const char* const* names = nullptr;   // value names for the settings screen (indexed by the rounded value)
 };
 
 const Info& info(Id id);
@@ -41,6 +44,9 @@ void reset(Id id);
 void save();
 
 }  // namespace vrset
+
+// applies the saved graphics preset as engine option overrides; call before OptionsManager::loadInitialValues()
+void vr_apply_graphics_preset();
 
 // modal in-game screen to change and save the settings above
 void vr_settings_menu();

@@ -13,6 +13,10 @@
 #include "graphics/font.h"
 #include "io/key.h"
 #include "io/mouse.h"
+#include <jansson.h>
+
+#include "options/Option.h"
+#include "options/OptionsManager.h"
 #include "osapi/osapi.h"
 #include "ui/ui.h"
 #include "ui/uidefs.h"
@@ -22,7 +26,11 @@ namespace vrset {
 namespace {
 
 // env, label, default, min, max, step, toggle
+const char* const PresetNames[] = { "Low", "Default", "High", "Ultra" };
+
 const Info Table[COUNT] = {
+	{ "FSO_VR_GFX_PRESET",  "Graphics preset (restart)",     1.0f,    0.0f,  3.0f,   1.0f,  false, PresetNames },
+	{ "FSO_VR_RENDER_SCALE", "Render scale (restart)",        1.0f,    0.5f,  1.5f,   0.05f, false },
 	{ "FSO_VR_HUD_DISTANCE", "HUD distance (m)",              10.0f,   4.0f,  40.0f,  1.0f,  false },
 	{ "FSO_VR_HUD_ZOOM",     "HUD size",                      0.9f,    0.5f,  1.4f,   0.05f, false },
 	{ "FSO_VR_HUD_HEIGHT",   "HUD height (1 = full)",         1.0f,    0.3f,  1.0f,   0.05f, false },
@@ -65,7 +73,7 @@ void load()
 			// toggles used to be "1" / "0"; a positive number overrides the others
 			if (Table[i].toggle)
 				v = atoi(e) != 0 ? 1.0f : 0.0f;
-			else if (atof(e) > 0.0 || (Table[i].min < 0.0f && e[0] != '\0'))
+			else if (atof(e) > 0.0 || (Table[i].min <= 0.0f && e[0] != '\0'))
 				v = static_cast<float>(atof(e));
 		}
 		Values[i] = clampv(static_cast<Id>(i), v);
@@ -121,7 +129,44 @@ void save()
 	}
 }
 
+void apply_graphics_preset()
+{
+	const int preset = static_cast<int>(get(GFX_PRESET) + 0.5f);
+	if (preset == 1)
+		return;   // Default: the engine's own settings (and the options screen) decide
+
+	auto* om = options::OptionsManager::instance();
+	// a command line option for the same setting wins
+	auto force = [&](const char* key, json_t* value) {
+		std::unique_ptr<json_t> v(value);
+		if (!om->isOverridden(key))
+			om->setOverride(key, std::move(v), "VR graphics preset (F9)");
+	};
+
+	// Raytraced shadows are never used here (ShadowRenderMethod 1): they made every model invisible in VR.
+	if (preset == 0) {
+		force("Graphics.Shadows", json_integer(0));
+		force("Graphics.AAMode", json_integer(0));
+		force("Graphics.BloomIntensity", json_integer(0));
+		force("Graphics.SoftParticles", json_false());
+	} else {
+		force("Graphics.AAMode", json_integer(preset == 3 ? 6 : 5));
+		force("Graphics.BloomIntensity", json_integer(preset == 3 ? 35 : 25));
+		force("Graphics.SoftParticles", json_true());
+		if (preset == 3) {
+			force("Graphics.Shadows", json_integer(2));
+			force("Graphics.ShadowRenderMethod", json_integer(0));
+			force("Graphics.DeferredCockpitLighting", json_true());
+		}
+	}
+}
+
 }  // namespace vrset
+
+void vr_apply_graphics_preset()
+{
+	vrset::apply_graphics_preset();
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // In-game settings screen: a modal loop like the game's popups, driven by the keyboard (arrows, Enter, R, Esc) and by
@@ -225,6 +270,8 @@ void vr_settings_menu()
 			char val[40];
 			if (in.toggle)
 				snprintf(val, sizeof(val), "%s", v >= 0.5f ? "On" : "Off");
+			else if (in.names)
+				snprintf(val, sizeof(val), "%s", in.names[static_cast<int>(v + 0.5f)]);
 			else if (in.step >= 1.0f)
 				snprintf(val, sizeof(val), "%.0f", v);
 			else

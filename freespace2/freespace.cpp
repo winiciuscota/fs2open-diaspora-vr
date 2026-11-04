@@ -1964,6 +1964,7 @@ void game_init()
 	// default values or user preferences
  	if (Using_in_game_options) {
 		default_settings_init(); // load in current preferred default options values, if any
+		vr_apply_graphics_preset();
 		options::OptionsManager::instance()->loadInitialValues();
 	}
 
