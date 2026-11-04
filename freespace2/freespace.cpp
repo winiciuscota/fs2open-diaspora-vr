@@ -4710,7 +4710,7 @@ void game_frame(bool paused)
 
 	}
 
-	if (!Pre_player_entry) {
+	if (!Pre_player_entry && !Cmdline_sim) {
 		if (! (Game_mode & GM_STANDALONE_SERVER)) {
 			DEBUG_GET_TIME( clear_time1 )
 			if (!openxr_enabled()) {
