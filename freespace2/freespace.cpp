@@ -6906,7 +6906,8 @@ void game_do_state(int state)
 	switch (state) {
 	case GS_STATE_MAIN_MENU:
 			game_set_frametime(GS_STATE_MAIN_MENU);
-			main_hall_do(flFrametime);
+			if (!Cmdline_sim)
+				main_hall_do(flFrametime);
 			break;
 
 		case GS_STATE_OPTIONS_MENU:
