@@ -1342,6 +1342,9 @@ void game_loading_callback(int count)
 
 void game_loading_callback_init()
 {
+	if (Cmdline_sim)
+		return;		// headless: no loading screen
+
 	Assert( Game_loading_callback_inited==0 );
 
 	Game_loading_background = bm_load(The_mission.loading_screen[gr_screen.res]);
@@ -1371,6 +1374,9 @@ void game_loading_callback_init()
 
 void game_loading_callback_close()
 {
+	if (Cmdline_sim)
+		return;
+
 	Assert( Game_loading_callback_inited==1 );
 
 	// Make sure bar shows all the way over.
