@@ -1397,6 +1397,12 @@ void pilotfile::csg_read_controls()
 			it = Control_config_presets.begin();
 		}
 
+		// Diaspora port: the bindings follow the pilot, not the campaign. Each campaign save remembers a preset name, and the
+		// original campaign's save still said "default", which threw away the player's own joystick preset (and the X52
+		// bindings) the moment that campaign was loaded. Keep what the pilot already has when it is a known preset.
+		if (control_config_get_current_preset() != Control_config_presets.end()) {
+			return;
+		}
 		control_config_use_preset(control_config_preset_for_device(*it));
 		return;
 	}
