@@ -118,8 +118,19 @@ void joy_menu_update(int gamestate)
 
 	int ww = 0, wh = 0;
 	SDL_GetWindowSize(window, &ww, &wh);
-	float mx = 0, my = 0;
-	SDL_GetMouseState(&mx, &my);
+
+	// SDL's own mouse state does not follow the events pushed below, so the stick keeps its own cursor position and only
+	// follows the real mouse (or the VR pointer) when that one moves
+	static bool cursor_init = false;
+	static float vx = 0, vy = 0, last_rx = -1, last_ry = -1;
+	float rx = 0, ry = 0;
+	SDL_GetMouseState(&rx, &ry);
+	if (!cursor_init || rx != last_rx || ry != last_ry) {
+		vx = rx;
+		vy = ry;
+		cursor_init = true;
+	}
+	float mx = vx, my = vy;
 
 	const float ax = axis_value(stick, 0), ay = axis_value(stick, 1);
 	if (ax != 0.0f || ay != 0.0f) {
@@ -139,6 +150,9 @@ void joy_menu_update(int gamestate)
 		mx = nx;
 		my = ny;
 	}
+	vx = mx;
+	vy = my;
+	SDL_GetMouseState(&last_rx, &last_ry);
 
 	// the button bound to "fire primary" clicks, the one bound to "fire secondary" is Escape (the X52 defaults are 0 and 1)
 	static io::joystick::Joystick* logged = nullptr;
