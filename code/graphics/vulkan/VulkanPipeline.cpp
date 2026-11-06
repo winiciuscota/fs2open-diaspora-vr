@@ -332,7 +332,7 @@ vk::UniquePipeline VulkanPipelineManager::createPipeline(const PipelineConfig& c
 	// Get shader modules
 	const VulkanShaderModule* shader = (shaderHandle >= 0) ? m_shaderManager->getShader(shaderHandle) : nullptr;
 	if (!shader || !shader->valid) {
-		nprintf(("vulkan", "VulkanPipelineManager: Shader not available for type %d\n",
+		mprintf(("VulkanPipelineManager: Shader not available for type %d\n",
 			static_cast<int>(config.shaderType)));
 		return {};
 	}
@@ -487,7 +487,7 @@ vk::UniquePipeline VulkanPipelineManager::createPipeline(const PipelineConfig& c
 		auto result = m_device.createGraphicsPipelineUnique(m_pipelineCache.get(), pipelineInfo);
 		return std::move(result.value);
 	} catch (const vk::SystemError& e) {
-		nprintf(("vulkan", "VulkanPipelineManager: Failed to create pipeline: %s\n", e.what()));
+		mprintf(("VulkanPipelineManager: Failed to create pipeline: %s\n", e.what()));
 		return {};
 	}
 }

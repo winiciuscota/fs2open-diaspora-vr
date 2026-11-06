@@ -220,7 +220,7 @@ SCP_vector<uint32_t> VulkanShaderCompiler::compile(const SCP_string& filename,
 	// Load and preprocess GLSL source
 	SCP_string source = shader_load_source(filename);
 	if (source.empty()) {
-		nprintf(("vulkan", "VulkanShaderCompiler: Failed to load GLSL source: %s\n", filename.c_str()));
+		mprintf(("VulkanShaderCompiler: Failed to load GLSL source: %s\n", filename.c_str()));
 		return {};
 	}
 
@@ -299,7 +299,7 @@ SCP_vector<uint32_t> VulkanShaderCompiler::compile(const SCP_string& filename,
 
 	if (status != shaderc_compilation_status_success) {
 		const char* errMsg = sc->result_get_error_message(result);
-		nprintf(("vulkan", "VulkanShaderCompiler: COMPILATION FAILED for %s (flags=0x%x):\n%s\n",
+		mprintf(("VulkanShaderCompiler: COMPILATION FAILED for %s (flags=0x%x):\n%s\n",
 		         filename.c_str(), flags, errMsg ? errMsg : "(no error message)"));
 	} else {
 		if (sc->result_get_num_warnings(result) > 0) {
