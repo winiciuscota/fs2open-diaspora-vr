@@ -352,7 +352,7 @@ bool VulkanPostProcessor::init(vk::Device device, vk::PhysicalDevice physDevice,
 	// Initialize MSAA resources if MSAA is enabled and G-buffer is ready
 	if (m_deferred.isInitialized() && Cmdline_msaa_enabled > 0) {
 		if (!initMSAA()) {
-			nprintf(("vulkan", "VulkanPostProcessor: MSAA initialization failed (non-fatal, disabling MSAA)\n"));
+			mprintf(("VulkanPostProcessor: MSAA initialization failed (non-fatal, disabling MSAA)\n"));
 			Cmdline_msaa_enabled = 0;
 		}
 	}

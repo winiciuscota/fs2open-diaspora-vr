@@ -46,7 +46,7 @@ bool VulkanDeferredGBuffer::initMsaa()
 			{{GBUF_ATT_EMISSIVE, vk::AttachmentLoadOp::eLoad}},
 		});
 	} catch (const vk::SystemError& e) {
-		nprintf(("vulkan", "VulkanPostProcessor: Failed to create MSAA G-buffer render pass: %s\n", e.what()));
+		mprintf(("VulkanPostProcessor: Failed to create MSAA G-buffer render pass: %s\n", e.what()));
 		shutdownMsaa();
 		return false;
 	}
@@ -60,7 +60,7 @@ bool VulkanDeferredGBuffer::initMsaa()
 			vk::ImageLayout::eDepthStencilAttachmentOptimal,
 		});
 	} catch (const vk::SystemError& e) {
-		nprintf(("vulkan", "VulkanPostProcessor: Failed to create MSAA G-buffer load render pass: %s\n", e.what()));
+		mprintf(("VulkanPostProcessor: Failed to create MSAA G-buffer load render pass: %s\n", e.what()));
 		shutdownMsaa();
 		return false;
 	}
@@ -113,7 +113,7 @@ bool VulkanDeferredGBuffer::initMsaa()
 		try {
 			m_msaaEmissiveCopyRenderPass = m_ctx->device.createRenderPass(rpInfo);
 		} catch (const vk::SystemError& e) {
-			nprintf(("vulkan", "VulkanPostProcessor: Failed to create MSAA emissive copy render pass: %s\n", e.what()));
+			mprintf(("VulkanPostProcessor: Failed to create MSAA emissive copy render pass: %s\n", e.what()));
 			shutdownMsaa();
 			return false;
 		}
@@ -130,7 +130,7 @@ bool VulkanDeferredGBuffer::initMsaa()
 			true, // useResolveDependency
 		});
 	} catch (const vk::SystemError& e) {
-		nprintf(("vulkan", "VulkanPostProcessor: Failed to create MSAA resolve render pass: %s\n", e.what()));
+		mprintf(("VulkanPostProcessor: Failed to create MSAA resolve render pass: %s\n", e.what()));
 		shutdownMsaa();
 		return false;
 	}
@@ -144,7 +144,7 @@ bool VulkanDeferredGBuffer::initMsaa()
 	}
 
 	m_msaaInitialized = true;
-	nprintf(("vulkan", "VulkanPostProcessor: MSAA initialized (%ux%u, %dx samples, 5 color + depth)\n",
+	mprintf(("VulkanPostProcessor: MSAA initialized (%ux%u, %dx samples, 5 color + depth)\n",
 		m_ctx->sceneExtent.width, m_ctx->sceneExtent.height, Cmdline_msaa_enabled));
 	return true;
 }
@@ -202,7 +202,7 @@ bool VulkanDeferredGBuffer::createMsaaTargets()
 		try {
 			m_msaaDepthImage = m_ctx->device.createImage(imageInfo);
 		} catch (const vk::SystemError& e) {
-			nprintf(("vulkan", "VulkanPostProcessor: Failed to create MSAA depth image: %s\n", e.what()));
+			mprintf(("VulkanPostProcessor: Failed to create MSAA depth image: %s\n", e.what()));
 			return false;
 		}
 
@@ -226,7 +226,7 @@ bool VulkanDeferredGBuffer::createMsaaTargets()
 		try {
 			m_msaaDepthView = m_ctx->device.createImageView(viewInfo);
 		} catch (const vk::SystemError& e) {
-			nprintf(("vulkan", "VulkanPostProcessor: Failed to create MSAA depth view: %s\n", e.what()));
+			mprintf(("VulkanPostProcessor: Failed to create MSAA depth view: %s\n", e.what()));
 			return false;
 		}
 	}
@@ -235,7 +235,7 @@ bool VulkanDeferredGBuffer::createMsaaTargets()
 	try {
 		m_msaaGbufFramebuffer = createGbufFramebuffer(m_msaaGbufRenderPass, false, true);
 	} catch (const vk::SystemError& e) {
-		nprintf(("vulkan", "VulkanPostProcessor: Failed to create MSAA G-buffer framebuffer: %s\n", e.what()));
+		mprintf(("VulkanPostProcessor: Failed to create MSAA G-buffer framebuffer: %s\n", e.what()));
 		return false;
 	}
 
@@ -253,7 +253,7 @@ bool VulkanDeferredGBuffer::createMsaaTargets()
 		try {
 			m_msaaEmissiveCopyFramebuffer = m_ctx->device.createFramebuffer(fbInfo);
 		} catch (const vk::SystemError& e) {
-			nprintf(("vulkan", "VulkanPostProcessor: Failed to create MSAA emissive copy framebuffer: %s\n", e.what()));
+			mprintf(("VulkanPostProcessor: Failed to create MSAA emissive copy framebuffer: %s\n", e.what()));
 			return false;
 		}
 	}
@@ -262,7 +262,7 @@ bool VulkanDeferredGBuffer::createMsaaTargets()
 	try {
 		m_msaaResolveFramebuffer = createGbufFramebuffer(m_msaaResolveRenderPass, false, false);
 	} catch (const vk::SystemError& e) {
-		nprintf(("vulkan", "VulkanPostProcessor: Failed to create MSAA resolve framebuffer: %s\n", e.what()));
+		mprintf(("VulkanPostProcessor: Failed to create MSAA resolve framebuffer: %s\n", e.what()));
 		return false;
 	}
 
