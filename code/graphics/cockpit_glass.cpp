@@ -52,7 +52,10 @@ void cockpit_glass_render(object* viewer)
 		early("strength 0");
 		return;
 	}
-	if (Viewer_mode & (VM_EXTERNAL | VM_CHASE | VM_OTHER_SHIP | VM_DEAD_VIEW | VM_FREECAMERA | VM_TOPDOWN | VM_WARP_CHASE | VM_CAMERA_LOCKED)) {
+	if (!ship_render_player_cockpit_active() || (Viewer_mode & (VM_EXTERNAL | VM_CHASE | VM_OTHER_SHIP | VM_DEAD_VIEW | VM_FREECAMERA | VM_TOPDOWN | VM_WARP_CHASE))) {
+		if (early_logged < 5) {
+			mprintf(("CANOPY: viewer mode is %d\n", static_cast<int>(Viewer_mode)));
+		}
 		early("viewer mode");
 		return;
 	}
@@ -180,7 +183,11 @@ void fx_test_frame(object* viewer)
 			continue;
 		}
 		const float d = vm_vec_dist(&o->pos, &viewer->pos);
-		if (d < 6000.0f && (best == nullptr || o->radius / d > best->radius / best_dist)) {
+		vec3d dir;
+		vm_vec_sub(&dir, &o->pos, &viewer->pos);
+		vm_vec_normalize(&dir);
+		// something big in front of the nose
+		if (d < 6000.0f && o->radius > 30.0f && vm_vec_dot(&dir, &viewer->orient.vec.fvec) > 0.85f && (best == nullptr || d < best_dist)) {
 			best_dist = d;
 			best = o;
 		}
