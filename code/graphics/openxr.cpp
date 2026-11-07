@@ -541,6 +541,21 @@ static void openxr_update_pointer(bool trigger, bool squeeze) {
 	click(SDL_BUTTON_RIGHT, right_down, squeeze);
 }
 
+// A / B on the right controller as one-shot menu keys (edge latched, cleared when read): the death popup uses them
+static bool xr_confirm_latch = false, xr_back_latch = false, xr_confirm_prev = false, xr_back_prev = false;
+
+bool openxr_confirm_pressed() {
+	const bool r = xr_confirm_latch;
+	xr_confirm_latch = false;
+	return r;
+}
+
+bool openxr_back_pressed() {
+	const bool r = xr_back_latch;
+	xr_back_latch = false;
+	return r;
+}
+
 static void openxr_update_input() {
 	if (!xr_input_ready)
 		return;
@@ -649,6 +664,12 @@ static void openxr_update_input() {
 	SDL_SetJoystickVirtualButton(xr_pad, 8, getBool(xr_act_stickclick, 0));
 	SDL_SetJoystickVirtualButton(xr_pad, 9, getBool(xr_act_stickclick, 1));
 	SDL_SetJoystickVirtualButton(xr_pad, 10, getBool(xr_act_menu, 0));
+
+	const bool confirm_now = getBool(xr_act_primary, 1), back_now = getBool(xr_act_secondary, 1);
+	xr_confirm_latch |= confirm_now && !xr_confirm_prev;
+	xr_back_latch |= back_now && !xr_back_prev;
+	xr_confirm_prev = confirm_now;
+	xr_back_prev = back_now;
 
 	openxr_update_pointer(getFloat(xr_act_trigger, 1) > 0.5f, getFloat(xr_act_squeeze, 1) > 0.5f);
 
@@ -1015,6 +1036,9 @@ bool openxr_requested() { return false; }
 OpenXRTrackingInfo openxr_start_stereo_frame() { return OpenXRTrackingInfo{}; }
 
 bool openxr_get_pointer_hand(float* /*u*/, float* /*v*/) { return false; }
+
+bool openxr_confirm_pressed() { return false; }
+bool openxr_back_pressed() { return false; }
 
 bool (*Openxr_hud_layer_begin_fn)() = nullptr;
 void (*Openxr_hud_layer_end_fn)() = nullptr;

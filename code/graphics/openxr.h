@@ -54,6 +54,9 @@ bool openxr_enabled();
 bool openxr_stereo_frame_open();
 // position of the pointing controller on the menu plane as seen from the head, in 0..1 screen units (may lie outside the screen)
 bool openxr_get_pointer_hand(float* u, float* v);
+// one-shot presses of A / B on the right controller since the last call (true once per press); used by the death popup
+bool openxr_confirm_pressed();
+bool openxr_back_pressed();
 
 // VR HUD composition layer: in stereo frames the HUD is drawn once (with the ship camera) between begin() and end(),
 // copied into its own swapchain and shown by the runtime as a quad fixed in the cockpit (tracking space), instead of

@@ -21,6 +21,7 @@
 #include "gamesequence/gamesequence.h"
 #include "gamesnd/gamesnd.h"
 #include "globalincs/alphacolors.h"
+#include "graphics/openxr.h"
 #include "hud/hudmessage.h"
 #include "io/key.h"
 #include "io/timer.h"
@@ -178,6 +179,11 @@ void popupdead_start()
 			Popupdead_button_text[1] = XSTR( "Return To Flight Deck", 106);
 			Popupdead_button_text[2] = XSTR( "Return To Briefing", 107);
 			Popupdead_num_choices = POPUPDEAD_NUM_CHOICES;
+			if (openxr_enabled()) {
+				// VR: the right controller's A / B buttons pick the first two choices (see popupdead_do_frame)
+				Popupdead_button_text[0] = "Retry Mission (A)";
+				Popupdead_button_text[1] = "Return To Flight Deck (B)";
+			}
 		}
 	} else {
 		// in multiplayer, we have different choices depending on respawn mode, etc.
@@ -224,6 +230,9 @@ void popupdead_start()
 	Popupdead_default_choice = 0;
 	Popupdead_choice = -1;
 	Popupdead_active = 1;
+	// drop A/B presses made while dying so they cannot pick a choice before the popup is seen
+	openxr_confirm_pressed();
+	openxr_back_pressed();
 
 	if (scripting::hooks::OnDialogInit->isActive())
 	{
@@ -509,6 +518,13 @@ int popupdead_do_frame(float  /*frametime*/)
 
 			if (choice < 0) {
 				choice = popupdead_check_buttons();
+			}
+
+			if (choice < 0 && (Game_mode & GM_NORMAL) && !Popupdead_skip_active && openxr_enabled()) {
+				if (openxr_confirm_pressed())
+					choice = 0;
+				else if (openxr_back_pressed())
+					choice = 1;
 			}
 		}
 
