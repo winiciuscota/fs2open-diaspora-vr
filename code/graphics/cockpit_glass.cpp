@@ -7,6 +7,7 @@
 #include "globalincs/systemvars.h"
 #include "graphics/2d.h"
 #include "graphics/material.h"
+#include "graphics/matrix.h"
 #include "graphics/vr_settings.h"
 #include "lighting/lighting.h"
 #include "math/vecmat.h"
