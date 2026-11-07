@@ -21,6 +21,7 @@ enum Id {
 	MENU_SCALE,     // menu quad scale
 	FLASH,          // strength of full-view flashes
 	SUNGLARE,       // strength of the sun glare flash (when light shafts are off)
+	CANOPY,         // strength of the scratches on the canopy glass (0 = off)
 	SHAFTS,         // light shafts (sun rays) on/off
 	SHAKE,          // camera shake on/off
 	PADLOCK,        // padlock views on/off (off: the hat targets instead)

@@ -29,6 +29,7 @@
 #endif
 
 #include "globalincs/alphacolors.h"
+#include "graphics/cockpit_glass.h"
 #include "graphics/vr_settings.h"
 #include "globalincs/crashdump.h"
 #include "globalincs/mspdb_callstack.h"
@@ -3745,6 +3746,9 @@ void game_render_frame( camid cid, const vec3d* offset, const matrix* rot_offset
 	extern void snd_spew_debug_info();
 	snd_spew_debug_info();
 #endif
+
+	// scratches on the canopy glass, lit by the sun
+	cockpit_glass_render(Viewer_obj);
 
 	// Do the sunspot
 	game_sunspot_process(flFrametime);
