@@ -182,6 +182,10 @@ static void ship_weapon_do_hit_stuff(object *pship_obj, object *weapon_obj, cons
 		}
 
 		decals::addDecal(wip->impact_decal, pship_obj, submodel_num, *hitpos, decal_orient);
+		static int logged = 0;
+		if (logged++ < 20) {
+			mprintf(("DECAL: '%s' hit hull of '%s' (submodel %d)\n", wip->name, shipp->ship_name, submodel_num));
+		}
 	}
 }
 

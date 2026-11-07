@@ -3749,6 +3749,7 @@ void game_render_frame( camid cid, const vec3d* offset, const matrix* rot_offset
 
 	// scratches on the canopy glass, lit by the sun
 	cockpit_glass_render(Viewer_obj);
+	fx_test_frame(Viewer_obj);
 
 	// Do the sunspot
 	game_sunspot_process(flFrametime);

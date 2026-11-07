@@ -7,3 +7,6 @@ class object;
 // by the sun: each cell brightens when its line of sight from the eye runs close to the direction of a sun.
 // Strength: vrset::CANOPY (FSO_VR_CANOPY). Call after the cockpit has been drawn, with the world view and projection set.
 void cockpit_glass_render(object* viewer);
+
+// FSO_FX_TEST=1 only: adds impact decals on the nearest ship every two seconds (and forces a sun for the canopy glass)
+void fx_test_frame(object* viewer);

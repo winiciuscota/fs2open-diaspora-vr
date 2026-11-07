@@ -1,9 +1,11 @@
 #include "graphics/cockpit_glass.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 
 #include "bmpman/bmpman.h"
+#include "decals/decals.h"
 #include "globalincs/systemvars.h"
 #include "graphics/2d.h"
 #include "graphics/material.h"
@@ -11,7 +13,9 @@
 #include "graphics/vr_settings.h"
 #include "lighting/lighting.h"
 #include "math/vecmat.h"
+#include "model/model.h"
 #include "object/object.h"
+#include "weapon/weapon.h"
 #include "render/3d.h"
 #include "ship/ship.h"
 #include "ship/shipfx.h"
@@ -63,6 +67,17 @@ void cockpit_glass_render(object* viewer)
 			n_suns++;
 		}
 	}
+	static const bool fx_test = getenv("FSO_FX_TEST") != nullptr;
+	if (fx_test) {
+		// test aid: a sun straight ahead and a little above the nose
+		vm_vec_scale_add(&suns[0], &Eye_matrix.vec.fvec, &Eye_matrix.vec.uvec, 0.3f);
+		vm_vec_normalize(&suns[0]);
+		n_suns = 1;
+	}
+	static int diag_frame = 0;
+	if (++diag_frame % 600 == 1) {
+		mprintf(("CANOPY: strength %.2f, suns reaching the pilot %d, texture %d, viewer mode %d\n", strength, n_suns, Scratch_bm, static_cast<int>(Viewer_mode)));
+	}
 	if (n_suns == 0) {
 		return;
 	}
@@ -79,6 +94,7 @@ void cockpit_glass_render(object* viewer)
 	gr_set_proj_matrix(Proj_fov, gr_screen.clip_aspect, Min_draw_distance_cockpit, Max_draw_distance);
 	gr_set_view_matrix(&Eye_position, &Eye_matrix);
 
+	int drawn = 0;
 	for (int r = 0; r < Rows; r++) {
 		for (int c = 0; c < Cols; c++) {
 			const float az0 = Az_min + (Az_max - Az_min) * c / Cols, az1 = Az_min + (Az_max - Az_min) * (c + 1) / Cols;
@@ -119,11 +135,92 @@ void cockpit_glass_render(object* viewer)
 			material_set_unlit(&mat, Scratch_bm, alpha, true, false);
 			mat.set_color(alpha, alpha * 0.93f, alpha * 0.82f, 1.0f);
 			g3_render_primitives_textured(&mat, v, 4, PRIM_TYPE_TRIFAN, false);
+			drawn++;
 		}
+	}
+	if (diag_frame % 600 == 1) {
+		mprintf(("CANOPY: %d cells drawn\n", drawn));
 	}
 
 	gr_end_proj_matrix();
 	gr_end_view_matrix();
 	gr_set_proj_matrix(Proj_fov, gr_screen.clip_aspect, Min_draw_distance, Max_draw_distance);
 	gr_set_view_matrix(&Eye_position, &Eye_matrix);
+}
+
+// FSO_FX_TEST=1: every two seconds fire a "virtual shot" from the player at the nearest other ship and add the impact decal of
+// the next weapon that has one, through the same call as a real hit (collideshipweapon.cpp).
+void fx_test_frame(object* viewer)
+{
+	static const bool fx_test = getenv("FSO_FX_TEST") != nullptr;
+	if (!fx_test || viewer == nullptr || viewer->type != OBJ_SHIP) {
+		return;
+	}
+	static int frame = 0;
+	static int next_weapon = 0;
+	if (++frame % 120 != 0) {
+		return;
+	}
+
+	object* best = nullptr;
+	float best_dist = 6000.0f;
+	for (auto so : list_range(&Ship_obj_list)) {
+		object* o = &Objects[so->objnum];
+		if (o == viewer || o->flags[Object::Object_Flags::Should_be_dead]) {
+			continue;
+		}
+		const float d = vm_vec_dist(&o->pos, &viewer->pos);
+		if (d < best_dist) {
+			best_dist = d;
+			best = o;
+		}
+	}
+	if (best == nullptr) {
+		mprintf(("FXTEST: no ship within 6 km\n"));
+		return;
+	}
+
+	ship* shipp = &Ships[best->instance];
+	ship_info* sip = &Ship_info[shipp->ship_info_index];
+	auto pmi = model_get_instance(shipp->model_instance_num);
+	auto pm = model_get(pmi->model_num);
+
+	vec3d p0 = viewer->pos, p1 = best->pos;
+	mc_info mc;
+	mc.model_instance_num = shipp->model_instance_num;
+	mc.model_num = sip->model_num;
+	mc.submodel_num = -1;
+	mc.orient = &best->orient;
+	mc.pos = &best->pos;
+	mc.p0 = &p0;
+	mc.p1 = &p1;
+	mc.lod = sip->collision_lod;
+	mc.flags = MC_CHECK_MODEL | MC_CHECK_RAY;
+	if (!model_collide(&mc)) {
+		mprintf(("FXTEST: ray at '%s' (%.0f m) missed\n", shipp->ship_name, best_dist));
+		return;
+	}
+
+	// next weapon that has an impact decal
+	const int n = static_cast<int>(Weapon_info.size());
+	const weapon_info* wip = nullptr;
+	for (int i = 0; i < n && wip == nullptr; i++) {
+		const weapon_info* w = &Weapon_info[(next_weapon + i) % n];
+		if (w->impact_decal.definition_handle >= 0) {
+			wip = w;
+			next_weapon = (next_weapon + i + 1) % n;
+		}
+	}
+	if (wip == nullptr) {
+		mprintf(("FXTEST: no weapon has an impact decal\n"));
+		return;
+	}
+
+	vec3d up;
+	model_instance_global_to_local_dir(&up, &viewer->orient.vec.uvec, pm, pmi, mc.hit_submodel, &best->orient);
+	matrix decal_orient;
+	vm_vector_2_matrix_norm(&decal_orient, &mc.hit_normal, &up);
+	mprintf(("FXTEST: decal of '%s' on '%s' (%.0f m) submodel %d\n", wip->name, shipp->ship_name, best_dist, mc.hit_submodel));
+	decals::creation_info info = wip->impact_decal;
+	decals::addDecal(info, best, mc.hit_submodel, mc.hit_point, decal_orient);
 }
