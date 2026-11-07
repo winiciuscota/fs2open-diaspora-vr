@@ -37,18 +37,28 @@ int Scratch_bm = -2;
 
 void cockpit_glass_render(object* viewer)
 {
+	static int early_logged = 0;
+	auto early = [&](const char* why) {
+		if (early_logged++ < 5) {
+			mprintf(("CANOPY: not drawn (%s)\n", why));
+		}
+	};
 	if (gr_screen.mode == GraphicsAPI::Stub || viewer == nullptr || viewer->type != OBJ_SHIP) {
+		early("no ship viewer");
 		return;
 	}
 	const float strength = vrset::get(vrset::CANOPY);
 	if (strength <= 0.0f) {
+		early("strength 0");
 		return;
 	}
 	if (Viewer_mode & (VM_EXTERNAL | VM_CHASE | VM_OTHER_SHIP | VM_DEAD_VIEW | VM_FREECAMERA | VM_TOPDOWN | VM_WARP_CHASE | VM_CAMERA_LOCKED)) {
+		early("viewer mode");
 		return;
 	}
 	if (Scratch_bm == -2) {
 		Scratch_bm = bm_load("canopy_scratch");
+		mprintf(("CANOPY: bitmap canopy_scratch -> %d\n", Scratch_bm));
 	}
 	if (Scratch_bm < 0) {
 		return;
@@ -170,7 +180,7 @@ void fx_test_frame(object* viewer)
 			continue;
 		}
 		const float d = vm_vec_dist(&o->pos, &viewer->pos);
-		if (d < best_dist) {
+		if (d < 6000.0f && (best == nullptr || o->radius / d > best->radius / best_dist)) {
 			best_dist = d;
 			best = o;
 		}
@@ -222,5 +232,6 @@ void fx_test_frame(object* viewer)
 	vm_vector_2_matrix_norm(&decal_orient, &mc.hit_normal, &up);
 	mprintf(("FXTEST: decal of '%s' on '%s' (%.0f m) submodel %d\n", wip->name, shipp->ship_name, best_dist, mc.hit_submodel));
 	decals::creation_info info = wip->impact_decal;
+	info.radius = ::util::UniformFloatRange(best->radius * 0.04f);	// visible from a distance
 	decals::addDecal(info, best, mc.hit_submodel, mc.hit_point, decal_orient);
 }
