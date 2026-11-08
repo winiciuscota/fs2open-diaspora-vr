@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
 #include "bmpman/bmpman.h"
 #include "decals/decals.h"
@@ -12,6 +13,7 @@
 #include "graphics/material.h"
 #include "graphics/matrix.h"
 #include "graphics/vr_settings.h"
+#include "io/timer.h"
 #include "lighting/lighting.h"
 #include "math/vecmat.h"
 #include "model/model.h"
@@ -70,12 +72,32 @@ float glass_distance(const CockpitGlass& g, const vec3d& dir)
 	return best;
 }
 
+struct Flash {
+	vec3d pos;
+	float size, t0;
+};
+std::vector<Flash> Flashes;
+const float Flash_life = 0.5f;	// seconds
+
 int Scratch_bm = -2;
 
 }
 
+void cockpit_glass_flash(const vec3d* pos, float size)
+{
+	if (size < 1.0f || Flashes.size() >= 16) {
+		return;
+	}
+	Flashes.push_back({ *pos, size, f2fl(Missiontime) });
+}
+
 void cockpit_glass_render(object* viewer)
 {
+	{
+		// forget old flashes
+		const float now = f2fl(Missiontime);
+		Flashes.erase(std::remove_if(Flashes.begin(), Flashes.end(), [now](const Flash& f) { return now - f.t0 > Flash_life || now < f.t0; }), Flashes.end());
+	}
 	static int early_logged = 0;
 	auto early = [&](const char* why) {
 		if (early_logged++ < 5) {
@@ -121,28 +143,21 @@ void cockpit_glass_render(object* viewer)
 			n_suns++;
 		}
 	}
-	// big explosions close by light the scratches too: the brightest few, weighted by how big and how near they are
+	// big explosions close by light the scratches too: the brightest few, weighted by how big and how near they are. Sources are the
+	// fireballs (ship deaths) and the impact flashes of weapons (flak bursts, missile hits), reported by cockpit_glass_flash().
 	{
 		struct Blast { vec3d dir; float w; } blasts[3] = {};
 		int n_blasts = 0;
-		for (const auto& fb : Fireballs) {
-			if (fb.objnum < 0 || fireball_is_warp(&Objects[fb.objnum])) {
-				continue;
-			}
-			const object* fo = &Objects[fb.objnum];
-			if (fo->radius < 1.2f) {
-				continue;
-			}
+		auto consider = [&](const vec3d& pos, float radius, float life) {
 			vec3d to;
-			vm_vec_sub(&to, &fo->pos, &Eye_position);
+			vm_vec_sub(&to, &pos, &Eye_position);
 			const float dist = vm_vec_mag(&to);
-			if (dist < 1.0f || dist > fo->radius * 25.0f) {
-				continue;
+			if (dist < 1.0f || dist > radius * 25.0f) {
+				return;
 			}
-			const float life = std::max(fireball_lifeleft_percent(const_cast<object*>(fo)), 0.0f);
-			const float w = std::min(fo->radius * 3.0f / dist, 1.0f) * sqrtf(life);
+			const float w = std::min(radius * 3.0f / dist, 1.0f) * sqrtf(std::max(life, 0.0f));
 			if (w < 0.05f) {
-				continue;
+				return;
 			}
 			vm_vec_normalize(&to);
 			int slot = n_blasts < 3 ? n_blasts++ : -1;
@@ -154,11 +169,21 @@ void cockpit_glass_render(object* viewer)
 					}
 				}
 				if (blasts[slot].w >= w) {
-					continue;
+					return;
 				}
 			}
 			blasts[slot].dir = to;
 			blasts[slot].w = w;
+		};
+		for (const auto& fb : Fireballs) {
+			if (fb.objnum < 0 || fireball_is_warp(&Objects[fb.objnum]) || Objects[fb.objnum].radius < 1.2f) {
+				continue;
+			}
+			consider(Objects[fb.objnum].pos, Objects[fb.objnum].radius, fireball_lifeleft_percent(&Objects[fb.objnum]));
+		}
+		const float now = f2fl(Missiontime);
+		for (const auto& f : Flashes) {
+			consider(f.pos, f.size, 1.0f - (now - f.t0) / Flash_life);
 		}
 		for (int k = 0; k < n_blasts && n_suns < 8; k++) {
 			suns[n_suns] = blasts[k].dir;

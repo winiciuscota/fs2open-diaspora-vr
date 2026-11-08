@@ -21,6 +21,7 @@
 #include "freespace.h"
 #include "gamesnd/gamesnd.h"
 #include "globalincs/linklist.h"
+#include "graphics/cockpit_glass.h"
 #include "graphics/color.h"
 #include "hud/hud.h"
 #include "hud/hudartillery.h"
@@ -8472,6 +8473,10 @@ void maybe_play_conditional_impacts(const std::array<std::optional<ConditionData
 		);
 	}
 	
+	if (armed_weapon) {
+		// light for the canopy scratches: the area-damage radius, or what the damage suggests
+		cockpit_glass_flash(hitpos, std::max(wip->shockwave.outer_rad * 0.6f, std::max(wip->damage * 0.04f, 1.5f)));
+	}
 	if (!valid_conditional_impact && wip->impact_weapon_expl_effect.isValid() && armed_weapon) {
     	auto particleSource = particle::ParticleManager::get()->createSource(wip->impact_weapon_expl_effect);
 

@@ -10,3 +10,7 @@ void cockpit_glass_render(object* viewer);
 
 // FSO_FX_TEST=1 only: adds impact decals on the nearest ship every two seconds (and forces a sun for the canopy glass)
 void fx_test_frame(object* viewer);
+
+// A weapon blew up at pos (flak burst, missile hit): its light reaches the canopy scratches for half a second. size ~ metres of blast.
+struct vec3d;
+void cockpit_glass_flash(const vec3d* pos, float size);
