@@ -51,7 +51,7 @@ void emit(const vec3d& world_pos, const vec3d& world_dir, const vec3d& ship_vel,
 	p.vel.xyz.z += (frand() - 0.5f) * 3.0f;
 	p.age = 0.0f;
 	p.life = 0.28f + frand() * 0.22f;
-	p.rad = (0.22f + frand() * 0.14f) * std::min(std::max(ship_radius * 0.12f, 1.0f), 3.0f);
+	p.rad = (0.12f + frand() * 0.08f) * std::min(std::max(ship_radius * 0.12f, 1.0f), 2.0f);
 	Puffs.push_back(p);
 }
 
@@ -168,7 +168,11 @@ void rcs_puffs_frame(float frametime)
 		}
 
 		const float rate = std::min(demand, 1.5f) * 90.0f * strength;	// puffs per second per active nozzle
+		const bool own = (objp == Viewer_obj);
 		for (int i = 0; i < n; i++) {
+			if (own && nozzles[i].pos.xyz.z > 0.0f) {
+				continue;	// the nose nozzles are in front of the pilot's eyes
+			}
 			if (score[i] < best * 0.5f || frand() > rate * frametime) {
 				continue;
 			}
@@ -197,7 +201,11 @@ void rcs_puffs_render()
 	}
 	for (const auto& p : Puffs) {
 		const float t = p.age / p.life;
-		const float alpha = 0.75f * (1.0f - t) * (1.0f - t);
+		const float eye_dist = vm_vec_dist(&p.pos, &Eye_position);
+		const float alpha = 0.75f * (1.0f - t) * (1.0f - t) * std::min(std::max((eye_dist - 2.0f) / 5.0f, 0.0f), 1.0f);	// never a blob in the pilot's face
+		if (alpha < 0.01f) {
+			continue;
+		}
 		vertex v;
 		memset(&v, 0, sizeof(v));
 		g3_transfer_vertex(&v, &p.pos);
@@ -205,7 +213,7 @@ void rcs_puffs_render()
 		material_set_unlit(&mat, Puff_bm, alpha, true, true);
 		mat.set_color(alpha * 0.85f, alpha * 0.93f, alpha, 1.0f);
 		// keep puffs visible from a distance: grow with the distance to the eye
-		const float far_scale = std::min(std::max(vm_vec_dist(&p.pos, &Eye_position) / 80.0f, 1.0f), 4.0f);
+		const float far_scale = std::min(std::max(vm_vec_dist(&p.pos, &Eye_position) / 150.0f, 1.0f), 2.5f);
 		g3_render_rect_screen_aligned(&mat, &v, 0, p.rad * (1.0f + t * 2.5f) * far_scale, 0.0f);
 	}
 }
