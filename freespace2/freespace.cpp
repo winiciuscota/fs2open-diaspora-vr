@@ -3725,6 +3725,9 @@ void game_render_frame( camid cid, const vec3d* offset, const matrix* rot_offset
 
 	Shadow_override = true;
 
+	// hull damage marks (forward quads; the deferred decal pass is unusable on Vulkan)
+	decals::renderForward();
+
 	//Draw the viewer 'cause we didn't before.
 	//This is currently seperate to facilitate deferred rendering on different view/proj matrices and with different settings
 	if (Viewer_obj && Viewer_obj->type == OBJ_SHIP && Viewer_obj->instance >= 0) {

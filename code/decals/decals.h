@@ -151,6 +151,13 @@ void initializeMission();
 void renderAll();
 
 /**
+ * @brief Diaspora port: forward-rendered replacement for the deferred decal pass (which draws garbage on the Vulkan backend). Draws every
+ * active decal as a textured quad lying on the hull, lit by the sun's angle. Call after the scene, with the world view and projection set.
+ * FSO_DECALS_ENGINE=1 goes back to the engine's deferred pass.
+ */
+void renderForward();
+
+/**
  * @brief Creates a new decal on the specified object at the specified location
  *
  * @param info The decal to create

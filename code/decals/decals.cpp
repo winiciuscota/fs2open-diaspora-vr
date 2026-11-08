@@ -1,10 +1,16 @@
 #include <nebula/neb.h>
+#include <cstdlib>
+#include <cstring>
 #include <utility>
 #include "decals/decals.h"
 
 #include "graphics/2d.h"
 #include "graphics/decal_draw_list.h"
 #include "graphics/util/uniform_structs.h"
+#include "graphics/material.h"
+#include "lighting/lighting.h"
+#include "render/3d.h"
+#include "globalincs/systemvars.h"
 #include "parse/parselo.h"
 #include "tracing/tracing.h"
 #include "ship/ship.h"
@@ -462,6 +468,80 @@ inline static void renderDecal(graphics::decal_draw_list& draw_list, const Decal
 	draw_list.add_decal(diffuse_bm, glow_bm, normal_bm, decal_time, getDecalTransform(decal, alpha));
 }
 
+static const bool Decals_use_engine_pass = getenv("FSO_DECALS_ENGINE") != nullptr;
+
+void renderForward() {
+	if (Decals_use_engine_pass || !decalSystemActive() || active_decals.empty()) {
+		return;
+	}
+
+	const float mission_time = f2fl(Missiontime);
+	vec3d sun = ZERO_VECTOR;
+	bool have_sun = false;
+	for (int i = 0; i < light_get_global_count() && !have_sun; i++) {
+		if (light_has_glare(i) && light_get_global_dir(&sun, i)) {
+			vm_vec_normalize(&sun);
+			have_sun = true;
+		}
+	}
+
+	for (const auto& decal : active_decals) {
+		if (!decal.isValid() || !std::holds_alternative<int>(decal.definition_handle) || decal.object.objp()->type != OBJ_SHIP) {
+			continue;
+		}
+		const int handle = std::get<int>(decal.definition_handle);
+		if (handle < 0 || handle >= static_cast<int>(DecalDefinitions.size())) {
+			continue;
+		}
+		const int bm = DecalDefinitions[handle].getDiffuseBitmap();
+		if (bm < 0) {
+			continue;
+		}
+
+		auto objp = decal.object.objp();
+		auto ship = &Ships[objp->instance];
+		auto pmi = model_get_instance(ship->model_instance_num);
+		auto pm = model_get(pmi->model_num);
+
+		vec3d pos;
+		matrix orient;
+		model_instance_local_to_global_point_orient(&pos, &orient, &decal.position, &decal.orientation, pm, pmi, decal.submodel, &objp->orient, &objp->pos);
+
+		const float size = decal.scale.xyz.x;
+		const float dist = vm_vec_dist(&pos, &Eye_position);
+		if (dist > size * 600.0f + 400.0f) {
+			continue;	// too small to see
+		}
+
+		float alpha = 1.0f;
+		const float progress = (mission_time - decal.creation_time) / decal.lifetime;
+		if (progress > 0.8f) {
+			alpha = 1.0f - smoothstep(0.8f, 1.0f, progress);
+		}
+
+		// float above the hull by an amount the depth buffer can still resolve at this distance
+		const float lift = std::min(std::max(dist * 0.0015f, 0.02f), size * 0.15f + 0.05f);
+		const vec3d centre = pos + orient.vec.fvec * lift;
+		const vec3d r = orient.vec.rvec * (size * 0.5f), u = orient.vec.uvec * (size * 0.5f);
+		const float uu[4] = { 0.0f, 1.0f, 1.0f, 0.0f }, vv[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+
+		vertex v[4];
+		memset(v, 0, sizeof(v));
+		for (int k = 0; k < 4; k++) {
+			vec3d world = centre + r * (2.0f * uu[k] - 1.0f) - u * (2.0f * vv[k] - 1.0f);
+			g3_transfer_vertex(&v[k], &world);
+			v[k].texture_position.u = uu[k];
+			v[k].texture_position.v = vv[k];
+		}
+
+		const float shade = have_sun ? 0.35f + 0.65f * std::max(vm_vec_dot(&orient.vec.fvec, &sun), 0.0f) : 0.6f;
+		material mat;
+		material_set_unlit(&mat, bm, alpha, true, true);
+		mat.set_color(shade, shade, shade, alpha);
+		g3_render_primitives_textured(&mat, v, 4, PRIM_TYPE_TRIFAN, false);
+	}
+}
+
 void renderAll() {
 	if (!decalSystemActive()) {
 		return;
@@ -506,6 +586,10 @@ void renderAll() {
 
 	if (active_decals.empty() && active_single_frame_decals.empty()) {
 		return;
+	}
+
+	if (!Decals_use_engine_pass) {
+		return;	// renderForward() draws them
 	}
 
 
