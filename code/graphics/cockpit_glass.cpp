@@ -18,6 +18,7 @@
 #include "object/object.h"
 #include "weapon/weapon.h"
 #include "fireball/fireballs.h"
+#include "ship/ship.h"
 #include "render/3d.h"
 #include "ship/ship.h"
 #include "ship/shipfx.h"
@@ -108,6 +109,7 @@ void cockpit_glass_render(object* viewer)
 	// suns that reach the pilot
 	vec3d suns[8];
 	float sun_w[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
+	float sun_pow[8] = { Glint_power, Glint_power, Glint_power, Glint_power, Glint_power, Glint_power, Glint_power, Glint_power };
 	int n_suns = 0;
 	const int n_lights = light_get_global_count();
 	for (int i = 0; i < n_lights && n_suns < 4; i++) {
@@ -128,18 +130,18 @@ void cockpit_glass_render(object* viewer)
 				continue;
 			}
 			const object* fo = &Objects[fb.objnum];
-			if (fo->radius < 6.0f) {
+			if (fo->radius < 1.2f) {
 				continue;
 			}
 			vec3d to;
 			vm_vec_sub(&to, &fo->pos, &Eye_position);
 			const float dist = vm_vec_mag(&to);
-			if (dist < 1.0f || dist > fo->radius * 12.0f) {
+			if (dist < 1.0f || dist > fo->radius * 25.0f) {
 				continue;
 			}
 			const float life = std::max(fireball_lifeleft_percent(const_cast<object*>(fo)), 0.0f);
-			const float w = std::min(fo->radius * 2.0f / dist, 1.0f) * sqrtf(life);
-			if (w < 0.08f) {
+			const float w = std::min(fo->radius * 3.0f / dist, 1.0f) * sqrtf(life);
+			if (w < 0.05f) {
 				continue;
 			}
 			vm_vec_normalize(&to);
@@ -160,7 +162,8 @@ void cockpit_glass_render(object* viewer)
 		}
 		for (int k = 0; k < n_blasts && n_suns < 8; k++) {
 			suns[n_suns] = blasts[k].dir;
-			sun_w[n_suns] = blasts[k].w * 1.2f;
+			sun_w[n_suns] = blasts[k].w * 2.5f;
+			sun_pow[n_suns] = 3.0f;	// a fireball is big: a wide lobe, not a point of light
 			n_suns++;
 		}
 	}
@@ -254,7 +257,7 @@ void cockpit_glass_render(object* viewer)
 			vm_vec_normalize(&ray);
 			float glint = 0.0f;
 			for (int s = 0; s < n_suns; s++) {
-				glint += sun_w[s] * powf(std::max(vm_vec_dot(&ray, &suns[s]), 0.0f), Glint_power);
+				glint += sun_w[s] * powf(std::max(vm_vec_dot(&ray, &suns[s]), 0.0f), sun_pow[s]);
 			}
 			const float alpha = glint * Gain * strength;
 			if (alpha < 0.004f) {
@@ -289,6 +292,12 @@ void fx_test_frame(object* viewer)
 	}
 	static int frame = 0;
 	static int next_weapon = 0;
+	if (frame % 240 == 119) {
+		// a big explosion ahead of the nose, to see the canopy catch its light
+		vec3d pos = viewer->pos + viewer->orient.vec.fvec * 70.0f + viewer->orient.vec.uvec * 8.0f;
+		fireball_create(&pos, FIREBALL_EXPLOSION_LARGE1, FIREBALL_LARGE_EXPLOSION, -1, 30.0f);
+		mprintf(("FXTEST: explosion at 70 m\n"));
+	}
 	if (++frame % 120 != 0) {
 		return;
 	}
