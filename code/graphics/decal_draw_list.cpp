@@ -107,6 +107,15 @@ void decal_draw_list::render() {
 
 	_buffer.submitData();
 
+	static int diag = 0;
+	if (diag++ % 300 == 0) {
+		size_t n = 0;
+		for (auto& d : _draws) {
+			n += d.second.second.size();
+		}
+		mprintf(("DECALS: drawing %d instances in %d batches\n", static_cast<int>(n), static_cast<int>(_draws.size())));
+	}
+
 	vertex_layout layout;
 	layout.add_vertex_component(vertex_format_data::POSITION3, sizeof(vec3d), 0);
 	layout.add_vertex_component(vertex_format_data::MATRIX4, sizeof(matrix4), 0, 1, 1);

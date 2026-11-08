@@ -865,6 +865,10 @@ void vulkan_start_decal_pass()
 	auto* stateTracker = getStateTracker();
 
 	if (!renderer->isSceneRendering() || !pp || !pp->deferred().isInitialized()) {
+		static int skipped = 0;
+		if (skipped++ < 3) {
+			mprintf(("DECALS: decal pass skipped (scene rendering %d, post processor %d)\n", static_cast<int>(renderer->isSceneRendering()), pp != nullptr));
+		}
 		return;
 	}
 
@@ -989,7 +993,7 @@ void vulkan_render_decals(decal_material* material_info,
 	// Get or create pipeline
 	vk::Pipeline pipeline = pipelineManager->getPipeline(config, *layout);
 	if (!pipeline) {
-		nprintf(("vulkan", "vulkan_render_decals: Failed to get pipeline!\n"));
+		mprintf(("DECALS: failed to get the decal pipeline\n"));
 		return;
 	}
 

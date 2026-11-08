@@ -242,4 +242,5 @@ void fx_test_frame(object* viewer)
 	decals::creation_info info = wip->impact_decal;
 	info.radius = ::util::UniformFloatRange(best->radius * 0.04f);	// visible from a distance
 	decals::addDecal(info, best, mc.hit_submodel, mc.hit_point, decal_orient);
+	mprintf(("FXTEST: decal system active %d, radius %.1f\n", static_cast<int>(decals::decalSystemActive()), best->radius * 0.04f));
 }
