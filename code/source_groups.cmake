@@ -472,8 +472,6 @@ add_file_folder("Graphics"
 	graphics/openxr.cpp
 	graphics/openxr.h
 	graphics/cockpit_glass.cpp
-	graphics/rcs_puffs.cpp
-	graphics/rcs_puffs.h
 	graphics/cockpit_glass.h
 	graphics/vr_settings.cpp
 	graphics/vr_settings.h
