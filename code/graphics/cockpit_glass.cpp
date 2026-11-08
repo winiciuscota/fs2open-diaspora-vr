@@ -33,6 +33,8 @@ const float Az_min = -112.5f, Az_max = 112.5f;      // degrees left/right of the
 const float El_min = -6.0f, El_max = 90.0f;         // degrees below/above the eye level
 const int Cols = 45, Rows = 16;                     // 5 / 6 degree cells
 const float Glint_power = 6.0f;
+const float Sun_level = 0.25f;     // scratch brightness in sunlight (the F9 setting scales both levels; 1.0 = as tuned here)
+const float Blast_level = 0.15f;   // ... and in the flash of flak bursts, missile hits and ship explosions
 const float Gain = 1.6f;
 
 // The canopy glass: the triangles of the glass in the ships' own models (cockpit_glass_data.h, eye-relative). The dome vertices are
@@ -130,7 +132,7 @@ void cockpit_glass_render(object* viewer)
 
 	// suns that reach the pilot
 	vec3d suns[8];
-	float sun_w[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
+	float sun_w[8] = { Sun_level, Sun_level, Sun_level, Sun_level, Sun_level, Sun_level, Sun_level, Sun_level };
 	float sun_pow[8] = { Glint_power, Glint_power, Glint_power, Glint_power, Glint_power, Glint_power, Glint_power, Glint_power };
 	int n_suns = 0;
 	const int n_lights = light_get_global_count();
@@ -187,7 +189,7 @@ void cockpit_glass_render(object* viewer)
 		}
 		for (int k = 0; k < n_blasts && n_suns < 8; k++) {
 			suns[n_suns] = blasts[k].dir;
-			sun_w[n_suns] = blasts[k].w * 2.5f;
+			sun_w[n_suns] = blasts[k].w * 2.5f * Blast_level;
 			sun_pow[n_suns] = 3.0f;	// a fireball is big: a wide lobe, not a point of light
 			n_suns++;
 		}
