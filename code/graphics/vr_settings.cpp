@@ -43,7 +43,7 @@ const Info Table[COUNT] = {
 	{ "FSO_VR_MENU_SCALE",   "Menu size",                     1.35f,   0.8f,  2.2f,   0.05f, false },
 	{ "FSO_VR_FLASH",        "Explosion flash strength",      0.35f,   0.0f,  1.0f,   0.05f, false },
 	{ "FSO_VR_SUNGLARE",     "Sun glare strength",            0.3f,    0.0f,  1.0f,   0.05f, false },
-	{ "FSO_VR_CANOPY",       "Canopy scratches",              0.5f,    0.0f,  1.0f,   0.05f, false },
+	{ "FSO_VR_CANOPY",       "Canopy scratches",              0.25f,    0.0f,  1.0f,   0.05f, false },
 	{ "FSO_VR_SHAFTS",       "Sun light shafts",              1.0f,    0.0f,  1.0f,   1.0f,  true },
 	{ "FSO_VR_SHAKE",        "Camera shake",                  0.0f,    0.0f,  1.0f,   1.0f,  true },
 	{ "FSO_VR_PADLOCK",      "Padlock views (off: hat targets)", 0.0f, 0.0f,  1.0f,   1.0f,  true },
