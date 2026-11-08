@@ -59,6 +59,7 @@
 #include "debris/debris.h"
 #include "debugconsole/console.h"
 #include "decals/decals.h"
+#include "graphics/rcs_puffs.h"
 #include "events/events.h"
 #include "exceptionhandler/exceptionhandler.h"
 #include "fireball/fireballs.h"
@@ -1514,6 +1515,7 @@ void game_post_level_init()
 
 	// Initialize decal system
 	decals::initializeMission();
+	rcs_puffs_clear();
 
 #ifndef NDEBUG
 	game_event_debug_init();
@@ -3727,6 +3729,7 @@ void game_render_frame( camid cid, const vec3d* offset, const matrix* rot_offset
 
 	// hull damage marks (forward quads; the deferred decal pass is unusable on Vulkan)
 	decals::renderForward();
+	rcs_puffs_render();
 
 	//Draw the viewer 'cause we didn't before.
 	//This is currently seperate to facilitate deferred rendering on different view/proj matrices and with different settings
@@ -3956,6 +3959,7 @@ void game_simulation_frame()
 		if (!physics_paused)	{
 			// Move particle system
 			particle::move_all(flFrametime);
+			rcs_puffs_frame(flFrametime);
 			particle::ParticleManager::get()->doFrame(flFrametime);
 
 			// Move missile trails
