@@ -1,4 +1,5 @@
 #include "graphics/cockpit_glass.h"
+#include "graphics/cockpit_glass_data.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -24,36 +25,43 @@ extern void object_get_eye(vec3d* eye_pos, matrix* eye_orient, const object* obj
 
 namespace {
 
-const float Dome_radius = 0.6f;     // m around the eye point (fallback for cockpits without a glass shape)
 
-// The canopy glass as a half-ellipsoid in cockpit space (origin = the pilot's eye, x right, y up, z forward), measured from the
-// cockpit models: the tub is 0.68 m wide, its rails sit at eye height and it runs 1.2 m ahead of the eye.
-struct Glass {
-	float cx, cy, cz;	// centre of the ellipsoid
-	float ax, ay, az;	// half axes
-};
-const Glass Glass_viper = { 0.0f, 0.10f, 0.50f, 0.36f, 0.55f, 0.80f };
-const Glass Glass_raptor = { 0.0f, 0.10f, 0.80f, 0.70f, 0.65f, 1.30f };
-
-// Where a ray from the eye (origin of cockpit space) along dir leaves the glass.
-float glass_distance(const Glass& g, const vec3d& dir)
+// The canopy glass: the triangles of the glass in the ships' own models (cockpit_glass_data.h, eye-relative). The dome vertices are
+// the points where rays from the eye leave the glass; cells whose corners do not all hit the glass are not drawn.
+float ray_triangle(const vec3d& dir, const float* t)
 {
-	const float ox = -g.cx, oy = -g.cy, oz = -g.cz;
-	const float A = dir.xyz.x * dir.xyz.x / (g.ax * g.ax) + dir.xyz.y * dir.xyz.y / (g.ay * g.ay) + dir.xyz.z * dir.xyz.z / (g.az * g.az);
-	const float B = ox * dir.xyz.x / (g.ax * g.ax) + oy * dir.xyz.y / (g.ay * g.ay) + oz * dir.xyz.z / (g.az * g.az);
-	const float C = ox * ox / (g.ax * g.ax) + oy * oy / (g.ay * g.ay) + oz * oz / (g.az * g.az) - 1.0f;
-	const float disc = B * B - A * C;
-	if (A <= 0.0f || disc < 0.0f) {
-		return Dome_radius;
+	const float e1[3] = { t[3] - t[0], t[4] - t[1], t[5] - t[2] }, e2[3] = { t[6] - t[0], t[7] - t[1], t[8] - t[2] };
+	const float d[3] = { dir.xyz.x, dir.xyz.y, dir.xyz.z };
+	const float p[3] = { d[1] * e2[2] - d[2] * e2[1], d[2] * e2[0] - d[0] * e2[2], d[0] * e2[1] - d[1] * e2[0] };
+	const float det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+	if (fabsf(det) < 1e-8f) {
+		return -1.0f;
 	}
-	const float t = (-B + sqrtf(disc)) / A;
-	return t > 0.05f ? t : Dome_radius;
+	const float inv = 1.0f / det;
+	const float s[3] = { -t[0], -t[1], -t[2] };	// ray origin (the eye) minus the first vertex
+	const float u = (s[0] * p[0] + s[1] * p[1] + s[2] * p[2]) * inv;
+	if (u < 0.0f || u > 1.0f) {
+		return -1.0f;
+	}
+	const float q[3] = { s[1] * e1[2] - s[2] * e1[1], s[2] * e1[0] - s[0] * e1[2], s[0] * e1[1] - s[1] * e1[0] };
+	const float v = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) * inv;
+	if (v < 0.0f || u + v > 1.0f) {
+		return -1.0f;
+	}
+	return (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * inv;
 }
-const float Az_min = -112.5f, Az_max = 112.5f;      // degrees left/right of the nose
-const float El_min = -6.0f, El_max = 90.0f;        // degrees below/above the horizon of the ship
-const int Cols = 15, Rows = 8;      // 15 / 12 degree cells
-const float Glint_power = 6.0f;
-const float Gain = 1.6f;
+
+float glass_distance(const CockpitGlass& g, const vec3d& dir)
+{
+	float best = -1.0f;
+	for (int i = 0; i < g.n_tris; i++) {
+		const float t = ray_triangle(dir, g.v + i * 9);
+		if (t > 0.02f && (best < 0.0f || t > best)) {	// the far wall of the bubble: the glass seen from inside
+			best = t;
+		}
+	}
+	return best;
+}
 
 int Scratch_bm = -2;
 
@@ -120,9 +128,32 @@ void cockpit_glass_render(object* viewer)
 	}
 
 	const ship_info* sip = &Ship_info[Ships[viewer->instance].ship_info_index];
-	const char* cp_name = (sip->cockpit_pof_file[0] != '\0') ? sip->cockpit_pof_file : "";
-	const bool shaped = strstr(cp_name, "Viper") != nullptr || strstr(cp_name, "Raptor") != nullptr;
-	const Glass& glass = strstr(cp_name, "Raptor") != nullptr ? Glass_raptor : Glass_viper;
+	const CockpitGlass* glass = nullptr;
+	for (const auto& g : Cockpit_glass) {
+		if (stricmp(g.cockpit_pof, sip->cockpit_pof_file) == 0) {
+			glass = &g;
+		}
+	}
+	if (glass == nullptr) {
+		early("no glass data for this cockpit");
+		return;
+	}
+	// distance from the eye to the glass along every dome direction, computed once per cockpit
+	static const CockpitGlass* grid_for = nullptr;
+	static float grid[Rows + 1][Cols + 1];
+	if (grid_for != glass) {
+		for (int r = 0; r <= Rows; r++) {
+			for (int c = 0; c <= Cols; c++) {
+				const float a = fl_radians(Az_min + (Az_max - Az_min) * c / Cols), e = fl_radians(El_min + (El_max - El_min) * r / Rows);
+				vec3d dir;
+				dir.xyz.x = sinf(a) * cosf(e);
+				dir.xyz.y = sinf(e);
+				dir.xyz.z = cosf(a) * cosf(e);
+				grid[r][c] = glass_distance(*glass, dir);
+			}
+		}
+		grid_for = glass;
+	}
 
 	vec3d eye_local, anchor;
 	matrix eye_orient;
@@ -145,6 +176,10 @@ void cockpit_glass_render(object* viewer)
 
 			vertex v[4];
 			memset(v, 0, sizeof(v));
+			if (grid[r][c] < 0.0f || grid[r][c + 1] < 0.0f || grid[r + 1][c] < 0.0f || grid[r + 1][c + 1] < 0.0f) {
+				continue;	// not all of this cell is on the glass
+			}
+			const float cell_d[4] = { grid[r][c], grid[r][c + 1], grid[r + 1][c + 1], grid[r + 1][c] };
 			vec3d centre = ZERO_VECTOR;
 			for (int k = 0; k < 4; k++) {
 				const float a = fl_radians(az[k]), e = fl_radians(el[k]);
@@ -152,7 +187,7 @@ void cockpit_glass_render(object* viewer)
 				dir.xyz.x = sinf(a) * cosf(e);
 				dir.xyz.y = sinf(e);
 				dir.xyz.z = cosf(a) * cosf(e);
-				vm_vec_copy_scale(&local, &dir, shaped ? glass_distance(glass, dir) : Dome_radius);
+				vm_vec_copy_scale(&local, &dir, cell_d[k]);
 				vm_vec_unrotate(&world, &local, &viewer->orient);
 				world += anchor;
 				g3_transfer_vertex(&v[k], &world);
