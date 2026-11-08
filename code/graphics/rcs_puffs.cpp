@@ -1,6 +1,7 @@
 #include "graphics/rcs_puffs.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -9,6 +10,7 @@
 #include "graphics/2d.h"
 #include "graphics/material.h"
 #include "graphics/vr_settings.h"
+#include "io/timer.h"
 #include "math/vecmat.h"
 #include "model/model.h"
 #include "object/object.h"
@@ -35,7 +37,7 @@ const size_t Max_puffs = 700;
 const float Max_ship_radius = 90.0f;	// fighters and shuttles; capital ships have no visible gas thrusters
 const float Max_distance = 1500.0f;
 
-void emit(const vec3d& world_pos, const vec3d& world_dir, const vec3d& ship_vel)
+void emit(const vec3d& world_pos, const vec3d& world_dir, const vec3d& ship_vel, float ship_radius)
 {
 	if (Puffs.size() >= Max_puffs) {
 		return;
@@ -48,7 +50,7 @@ void emit(const vec3d& world_pos, const vec3d& world_dir, const vec3d& ship_vel)
 	p.vel.xyz.z += (frand() - 0.5f) * 1.2f;
 	p.age = 0.0f;
 	p.life = 0.22f + frand() * 0.2f;
-	p.rad = 0.18f + frand() * 0.12f;
+	p.rad = (0.22f + frand() * 0.14f) * std::min(std::max(ship_radius * 0.12f, 1.0f), 3.0f);
 	Puffs.push_back(p);
 }
 
@@ -94,6 +96,14 @@ void rcs_puffs_frame(float frametime)
 		// the angular velocity change the controls ask for, in the ship's own axes
 		vec3d want;
 		vm_vec_sub(&want, &pi->desired_rotvel, &pi->rotvel);
+		static const bool fx_test = getenv("FSO_FX_TEST") != nullptr;
+		if (fx_test) {
+			// test aid: every ship keeps asking for a turn that changes direction twice a second
+			const float t = f2fl(Missiontime);
+			want.xyz.x = sinf(t * 3.1f) * pi->max_rotvel.xyz.x;
+			want.xyz.y = cosf(t * 2.3f) * pi->max_rotvel.xyz.y;
+			want.xyz.z = 0.0f;
+		}
 		const vec3d maxrot = pi->max_rotvel;
 		vec3d norm;
 		norm.xyz.x = want.xyz.x / std::max(maxrot.xyz.x, 0.1f);
@@ -160,7 +170,7 @@ void rcs_puffs_frame(float frametime)
 			vm_vec_unrotate(&world_pos, &lp, &objp->orient);
 			world_pos += objp->pos;
 			vm_vec_unrotate(&world_dir, &nozzles[i].dir, &objp->orient);
-			emit(world_pos, world_dir, objp->phys_info.vel);
+			emit(world_pos, world_dir, objp->phys_info.vel, objp->radius);
 		}
 	}
 }
@@ -185,6 +195,8 @@ void rcs_puffs_render()
 		material mat;
 		material_set_unlit(&mat, Puff_bm, alpha, true, true);
 		mat.set_color(alpha * 0.85f, alpha * 0.93f, alpha, 1.0f);
-		g3_render_rect_screen_aligned(&mat, &v, 0, p.rad * (1.0f + t * 2.5f), 0.0f);
+		// keep puffs visible from a distance: grow with the distance to the eye
+		const float far_scale = std::min(std::max(vm_vec_dist(&p.pos, &Eye_position) / 80.0f, 1.0f), 4.0f);
+		g3_render_rect_screen_aligned(&mat, &v, 0, p.rad * (1.0f + t * 2.5f) * far_scale, 0.0f);
 	}
 }
