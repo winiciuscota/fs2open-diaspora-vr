@@ -8,6 +8,7 @@
  */
 
 #include <cstdlib>
+#include "graphics/openxr.h"
 #include "graphics/vr_settings.h"
 #include <climits>
 
@@ -841,6 +842,10 @@ void main_hall_do(float frametime)
 
 			Main_hall_cheat = "";
 		}
+	}
+
+	if (openxr_enabled() && openxr_settings_pressed()) {
+		key = KEY_F9;
 	}
 
 	switch(key) {

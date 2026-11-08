@@ -56,6 +56,8 @@ bool openxr_stereo_frame_open();
 bool openxr_get_pointer_hand(float* u, float* v);
 // one-shot presses of A / B on the right controller since the last call (true once per press); used by the death popup
 bool openxr_confirm_pressed();
+// the left controller's menu button: opens the VR settings screen in the main hall and the options screen (there is no keyboard in the headset)
+bool openxr_settings_pressed();
 bool openxr_back_pressed();
 
 // VR HUD composition layer: in stereo frames the HUD is drawn once (with the ship camera) between begin() and end(),

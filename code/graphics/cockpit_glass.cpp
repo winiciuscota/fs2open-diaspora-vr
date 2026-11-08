@@ -33,6 +33,7 @@ const float Az_min = -112.5f, Az_max = 112.5f;      // degrees left/right of the
 const float El_min = -6.0f, El_max = 90.0f;         // degrees below/above the eye level
 const int Cols = 45, Rows = 16;                     // 5 / 6 degree cells
 const float Glint_power = 6.0f;
+const float Ambient_level = 0.05f; // scratch brightness with no light at all (the glass is never perfectly invisible)
 const float Sun_level = 0.25f;     // scratch brightness in sunlight (the F9 setting scales both levels; 1.0 = as tuned here)
 const float Blast_level = 0.15f;   // ... and in the flash of flak bursts, missile hits and ship explosions
 const float Gain = 1.6f;
@@ -205,9 +206,6 @@ void cockpit_glass_render(object* viewer)
 	if (++diag_frame % 600 == 1) {
 		mprintf(("CANOPY: strength %.2f, suns reaching the pilot %d, texture %d, viewer mode %d\n", strength, n_suns, Scratch_bm, static_cast<int>(Viewer_mode)));
 	}
-	if (n_suns == 0) {
-		return;
-	}
 
 	const ship_info* sip = &Ship_info[Ships[viewer->instance].ship_info_index];
 	const CockpitGlass* glass = nullptr;
@@ -282,7 +280,7 @@ void cockpit_glass_render(object* viewer)
 			vec3d ray;
 			vm_vec_sub(&ray, &centre, &Eye_position);
 			vm_vec_normalize(&ray);
-			float glint = 0.0f;
+			float glint = Ambient_level;
 			for (int s = 0; s < n_suns; s++) {
 				glint += sun_w[s] * powf(std::max(vm_vec_dot(&ray, &suns[s]), 0.0f), sun_pow[s]);
 			}

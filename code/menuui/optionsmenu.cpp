@@ -11,6 +11,7 @@
 
 
 #include "bmpman/bmpman.h"
+#include "graphics/openxr.h"
 #include "graphics/vr_settings.h"
 #include "freespace.h"
 #include "cmdline/cmdline.h"
@@ -1236,6 +1237,9 @@ void options_menu_do_frame(float  /*frametime*/)
 
 	Assert(Options_menu_inited);
 	k = Ui_window.process() & ~KEY_DEBUGGED;
+	if (openxr_enabled() && openxr_settings_pressed()) {
+		k = KEY_F9;
+	}
 	switch (k) {
 		case KEY_SHIFTED | KEY_TAB:
 		case KEY_LEFT:  // activate previous tab

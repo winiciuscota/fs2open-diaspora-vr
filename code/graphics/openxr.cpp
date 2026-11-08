@@ -542,7 +542,14 @@ static void openxr_update_pointer(bool trigger, bool squeeze) {
 }
 
 // A / B on the right controller as one-shot menu keys (edge latched, cleared when read): the death popup uses them
+static bool xr_settings_latch = false, xr_settings_prev = false;
 static bool xr_confirm_latch = false, xr_back_latch = false, xr_confirm_prev = false, xr_back_prev = false;
+
+bool openxr_settings_pressed() {
+	const bool r = xr_settings_latch;
+	xr_settings_latch = false;
+	return r;
+}
 
 bool openxr_confirm_pressed() {
 	const bool r = xr_confirm_latch;
@@ -669,6 +676,9 @@ static void openxr_update_input() {
 	xr_confirm_latch |= confirm_now && !xr_confirm_prev;
 	xr_back_latch |= back_now && !xr_back_prev;
 	xr_confirm_prev = confirm_now;
+	const bool settings_now = getBool(xr_act_menu, 0);
+	xr_settings_latch |= settings_now && !xr_settings_prev;
+	xr_settings_prev = settings_now;
 	xr_back_prev = back_now;
 
 	openxr_update_pointer(getFloat(xr_act_trigger, 1) > 0.5f, getFloat(xr_act_squeeze, 1) > 0.5f);
@@ -1038,6 +1048,7 @@ OpenXRTrackingInfo openxr_start_stereo_frame() { return OpenXRTrackingInfo{}; }
 bool openxr_get_pointer_hand(float* /*u*/, float* /*v*/) { return false; }
 
 bool openxr_confirm_pressed() { return false; }
+bool openxr_settings_pressed() { return false; }
 bool openxr_back_pressed() { return false; }
 
 bool (*Openxr_hud_layer_begin_fn)() = nullptr;
