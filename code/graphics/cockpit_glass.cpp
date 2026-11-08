@@ -34,7 +34,7 @@ const float Az_min = -112.5f, Az_max = 112.5f;      // degrees left/right of the
 const float El_min = -6.0f, El_max = 90.0f;         // degrees below/above the eye level
 const int Cols = 45, Rows = 16;                     // 5 / 6 degree cells
 const float Glint_power = 6.0f;
-const float Ambient_level = 0.05f; // scratch brightness with no light at all (the glass is never perfectly invisible)
+const float Ambient_level = 0.085f; // scratch brightness with no light at all (the glass is never perfectly invisible)
 const float Sun_level = 0.25f;     // scratch brightness in sunlight (the F9 setting scales both levels; 1.0 = as tuned here)
 const float Blast_level = 0.15f;   // ... and in the flash of flak bursts, missile hits and ship explosions
 const float Gain = 1.6f;
@@ -749,37 +749,57 @@ static bool cockpit_glass_render_v2(object* viewer)
 			if (dist <= 0.0f) {
 				continue;
 			}
-			vec3d dl = cr.dir, local, dw, e_az, e_el, p;
-			vm_vec_copy_scale(&local, &dl, dist * 0.998f);
-			vm_vec_unrotate(&p, &local, &viewer->orient);
-			p += anchor;
-			vm_vec_unrotate(&dw, &dl, &viewer->orient);
-			vm_vec_cross(&e_az, &viewer->orient.vec.uvec, &dw);
+			// ship-local frame at the crack: every vertex of the (3x3 cell) patch is ray-cast onto the glass, so the crack follows its shape
+			vec3d dl = cr.dir, e_az, e_el, dw;
+			const vec3d up_local = { { { 0.0f, 1.0f, 0.0f } } };
+			vm_vec_cross(&e_az, &up_local, &dl);
 			vm_vec_normalize(&e_az);
-			vm_vec_cross(&e_el, &dw, &e_az);
+			vm_vec_cross(&e_el, &dl, &e_az);
+			vm_vec_unrotate(&dw, &dl, &viewer->orient);
 			float x = 0.12f;
 			for (int s = 0; s < n_lights; s++) {
 				x += lights[s].w * 3.0f * powf(std::max(vm_vec_dot(&dw, &lights[s].dir), 0.0f), std::min(lights[s].pw, 2.5f));
 			}
-			const float cs = cosf(cr.rot) * cr.size, sn = sinf(cr.rot) * cr.size;
-			const float qu[4] = { 0, 1, 1, 0 }, qv[4] = { 0, 0, 1, 1 };
+			const float cs = cosf(cr.rot), sn = sinf(cr.rot);
 			const float ox = (cr.variant % 2) * 0.5f, oy = (cr.variant / 2) * 0.5f;
-			vertex v[4];
-			memset(v, 0, sizeof(v));
-			for (int k = 0; k < 4; k++) {
-				const float px = qu[k] * 2.0f - 1.0f, py = qv[k] * 2.0f - 1.0f;
-				vec3d w;
-				w.xyz.x = p.xyz.x + e_az.xyz.x * (px * cs - py * sn) + e_el.xyz.x * (px * sn + py * cs);
-				w.xyz.y = p.xyz.y + e_az.xyz.y * (px * cs - py * sn) + e_el.xyz.y * (px * sn + py * cs);
-				w.xyz.z = p.xyz.z + e_az.xyz.z * (px * cs - py * sn) + e_el.xyz.z * (px * sn + py * cs);
-				g3_transfer_vertex(&v[k], &w);
-				v[k].texture_position.u = ox + qu[k] * 0.5f;
-				v[k].texture_position.v = oy + qv[k] * 0.5f;
-				colour(v[k], x);
+			const int N = 4;	// vertices per side
+			vertex pv[N][N];
+			bool ok[N][N];
+			for (int j = 0; j < N; j++) {
+				for (int i = 0; i < N; i++) {
+					const float u = static_cast<float>(i) / (N - 1), vv = static_cast<float>(j) / (N - 1);
+					const float px = u * 2.0f - 1.0f, py = vv * 2.0f - 1.0f;
+					const float rx = (px * cs - py * sn) * cr.size / dist, ry = (px * sn + py * cs) * cr.size / dist;
+					vec3d d;
+					d.xyz.x = dl.xyz.x + e_az.xyz.x * rx + e_el.xyz.x * ry;
+					d.xyz.y = dl.xyz.y + e_az.xyz.y * rx + e_el.xyz.y * ry;
+					d.xyz.z = dl.xyz.z + e_az.xyz.z * rx + e_el.xyz.z * ry;
+					vm_vec_normalize(&d);
+					float t = glass_distance(*glass, d);
+					ok[j][i] = t > 0.0f;
+					if (t <= 0.0f) {
+						t = dist;	// off the glass: the nearest plane
+					}
+					vec3d local, w;
+					vm_vec_copy_scale(&local, &d, t * 0.997f);
+					vm_vec_unrotate(&w, &local, &viewer->orient);
+					w += anchor;
+					memset(&pv[j][i], 0, sizeof(vertex));
+					g3_transfer_vertex(&pv[j][i], &w);
+					pv[j][i].texture_position.u = ox + u * 0.5f;
+					pv[j][i].texture_position.v = oy + vv * 0.5f;
+					colour(pv[j][i], ok[j][i] ? x : 0.0f);
+				}
 			}
-			const int order[6] = { 0, 1, 2, 0, 2, 3 };
-			for (int k = 0; k < 6; k++) {
-				batch.push_back(v[order[k]]);
+			for (int j = 0; j < N - 1; j++) {
+				for (int i = 0; i < N - 1; i++) {
+					batch.push_back(pv[j][i]);
+					batch.push_back(pv[j][i + 1]);
+					batch.push_back(pv[j + 1][i + 1]);
+					batch.push_back(pv[j][i]);
+					batch.push_back(pv[j + 1][i + 1]);
+					batch.push_back(pv[j + 1][i]);
+				}
 			}
 		}
 		if (!batch.empty()) {
