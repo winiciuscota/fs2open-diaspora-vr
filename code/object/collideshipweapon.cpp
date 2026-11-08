@@ -164,6 +164,13 @@ static void ship_weapon_do_hit_stuff(object *pship_obj, object *weapon_obj, cons
 		ship_apply_whack( &force, world_hitpos, pship_obj );
 	}
 
+	{
+		static int hit_logged = 0;
+		if (hit_logged++ < 30) {
+			mprintf(("HIT: '%s' on '%s', shield quadrant %d, impact decal %d\n", wip->name, shipp->ship_name, quadrant_num, wip->impact_decal.definition_handle));
+		}
+	}
+
 	// Add impact decal
 	if (quadrant_num == -1 && wip->impact_decal.definition_handle >= 0) {
 		// Use the weapon orientation to augment the orientation computation.

@@ -24,10 +24,34 @@ extern void object_get_eye(vec3d* eye_pos, matrix* eye_orient, const object* obj
 
 namespace {
 
-const float Dome_radius = 0.6f;     // m around the eye point
+const float Dome_radius = 0.6f;     // m around the eye point (fallback for cockpits without a glass shape)
+
+// The canopy glass as a half-ellipsoid in cockpit space (origin = the pilot's eye, x right, y up, z forward), measured from the
+// cockpit models: the tub is 0.68 m wide, its rails sit at eye height and it runs 1.2 m ahead of the eye.
+struct Glass {
+	float cx, cy, cz;	// centre of the ellipsoid
+	float ax, ay, az;	// half axes
+};
+const Glass Glass_viper = { 0.0f, 0.10f, 0.50f, 0.36f, 0.55f, 0.80f };
+const Glass Glass_raptor = { 0.0f, 0.10f, 0.80f, 0.70f, 0.65f, 1.30f };
+
+// Where a ray from the eye (origin of cockpit space) along dir leaves the glass.
+float glass_distance(const Glass& g, const vec3d& dir)
+{
+	const float ox = -g.cx, oy = -g.cy, oz = -g.cz;
+	const float A = dir.xyz.x * dir.xyz.x / (g.ax * g.ax) + dir.xyz.y * dir.xyz.y / (g.ay * g.ay) + dir.xyz.z * dir.xyz.z / (g.az * g.az);
+	const float B = ox * dir.xyz.x / (g.ax * g.ax) + oy * dir.xyz.y / (g.ay * g.ay) + oz * dir.xyz.z / (g.az * g.az);
+	const float C = ox * ox / (g.ax * g.ax) + oy * oy / (g.ay * g.ay) + oz * oz / (g.az * g.az) - 1.0f;
+	const float disc = B * B - A * C;
+	if (A <= 0.0f || disc < 0.0f) {
+		return Dome_radius;
+	}
+	const float t = (-B + sqrtf(disc)) / A;
+	return t > 0.05f ? t : Dome_radius;
+}
 const float Az_min = -112.5f, Az_max = 112.5f;      // degrees left/right of the nose
-const float El_min = -15.0f, El_max = 90.0f;        // degrees below/above the horizon of the ship
-const int Cols = 15, Rows = 7;      // 15 degree cells
+const float El_min = -6.0f, El_max = 90.0f;        // degrees below/above the horizon of the ship
+const int Cols = 15, Rows = 8;      // 15 / 12 degree cells
 const float Glint_power = 6.0f;
 const float Gain = 1.6f;
 
@@ -95,6 +119,11 @@ void cockpit_glass_render(object* viewer)
 		return;
 	}
 
+	const ship_info* sip = &Ship_info[Ships[viewer->instance].ship_info_index];
+	const char* cp_name = (sip->cockpit_pof_file[0] != '\0') ? sip->cockpit_pof_file : "";
+	const bool shaped = strstr(cp_name, "Viper") != nullptr || strstr(cp_name, "Raptor") != nullptr;
+	const Glass& glass = strstr(cp_name, "Raptor") != nullptr ? Glass_raptor : Glass_viper;
+
 	vec3d eye_local, anchor;
 	matrix eye_orient;
 	object_get_eye(&eye_local, &eye_orient, viewer, false, true, true);
@@ -119,10 +148,11 @@ void cockpit_glass_render(object* viewer)
 			vec3d centre = ZERO_VECTOR;
 			for (int k = 0; k < 4; k++) {
 				const float a = fl_radians(az[k]), e = fl_radians(el[k]);
-				vec3d local, world;
-				local.xyz.x = sinf(a) * cosf(e) * Dome_radius;
-				local.xyz.y = sinf(e) * Dome_radius;
-				local.xyz.z = cosf(a) * cosf(e) * Dome_radius;
+				vec3d local, world, dir;
+				dir.xyz.x = sinf(a) * cosf(e);
+				dir.xyz.y = sinf(e);
+				dir.xyz.z = cosf(a) * cosf(e);
+				vm_vec_copy_scale(&local, &dir, shaped ? glass_distance(glass, dir) : Dome_radius);
 				vm_vec_unrotate(&world, &local, &viewer->orient);
 				world += anchor;
 				g3_transfer_vertex(&v[k], &world);
@@ -145,7 +175,7 @@ void cockpit_glass_render(object* viewer)
 			}
 
 			material mat;
-			material_set_unlit(&mat, Scratch_bm, alpha, true, false);
+			material_set_unlit(&mat, Scratch_bm, alpha, true, true);	// depth-tested: the dash and the frame hide the scratches behind them
 			mat.set_blend_mode(ALPHA_BLEND_ADDITIVE);
 			mat.set_color(alpha, alpha * 0.93f, alpha * 0.82f, 1.0f);
 			g3_render_primitives_textured(&mat, v, 4, PRIM_TYPE_TRIFAN, false);

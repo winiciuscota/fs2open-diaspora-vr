@@ -635,6 +635,8 @@ void addDecal(creation_info& info, const object* host, int submodel, const vec3d
 	newDecal.orientation = local_orient;
 	if (info.width < 0.0f || info.height < 0.0f) {
 		float radius = info.radius.next();
+		// Diaspora: marks scale with the target, so a hit on a capital ship is still visible from a distance
+		radius = std::max(radius, host->radius * 0.012f);
 		newDecal.scale.xyz.x = radius;
 		newDecal.scale.xyz.y = radius;
 		newDecal.scale.xyz.z = radius;
