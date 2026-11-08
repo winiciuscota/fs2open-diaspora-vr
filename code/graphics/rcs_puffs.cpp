@@ -33,9 +33,10 @@ struct Nozzle {
 std::vector<Puff> Puffs;
 int Puff_bm = -2;
 
-const size_t Max_puffs = 700;
+const size_t Max_puffs = 1500;
 const float Max_ship_radius = 90.0f;	// fighters and shuttles; capital ships have no visible gas thrusters
 const float Max_distance = 1500.0f;
+const int Max_nozzles = 32;
 
 void emit(const vec3d& world_pos, const vec3d& world_dir, const vec3d& ship_vel, float ship_radius)
 {
@@ -44,12 +45,12 @@ void emit(const vec3d& world_pos, const vec3d& world_dir, const vec3d& ship_vel,
 	}
 	Puff p;
 	p.pos = world_pos;
-	p.vel = ship_vel + world_dir * (5.0f + frand() * 3.0f);
-	p.vel.xyz.x += (frand() - 0.5f) * 1.2f;
-	p.vel.xyz.y += (frand() - 0.5f) * 1.2f;
-	p.vel.xyz.z += (frand() - 0.5f) * 1.2f;
+	p.vel = ship_vel + world_dir * (28.0f + frand() * 14.0f);	// a jet, not a drift
+	p.vel.xyz.x += (frand() - 0.5f) * 3.0f;
+	p.vel.xyz.y += (frand() - 0.5f) * 3.0f;
+	p.vel.xyz.z += (frand() - 0.5f) * 3.0f;
 	p.age = 0.0f;
-	p.life = 0.22f + frand() * 0.2f;
+	p.life = 0.28f + frand() * 0.22f;
 	p.rad = (0.22f + frand() * 0.14f) * std::min(std::max(ship_radius * 0.12f, 1.0f), 3.0f);
 	Puffs.push_back(p);
 }
@@ -70,7 +71,7 @@ void rcs_puffs_frame(float frametime)
 	for (auto& p : Puffs) {
 		p.age += frametime;
 		p.pos += p.vel * frametime;
-		vm_vec_scale(&p.vel, std::max(0.0f, 1.0f - 2.5f * frametime));	// gas thins out and stops
+		vm_vec_scale(&p.vel, std::max(0.0f, 1.0f - 4.0f * frametime));	// gas thins out and stops
 	}
 	Puffs.erase(std::remove_if(Puffs.begin(), Puffs.end(), [](const Puff& p) { return p.age >= p.life; }), Puffs.end());
 
@@ -122,21 +123,26 @@ void rcs_puffs_frame(float frametime)
 		const vec3d lo = pm->mins, hi = pm->maxs;
 		const float hx = (hi.xyz.x - lo.xyz.x) * 0.5f, hy = (hi.xyz.y - lo.xyz.y) * 0.5f, hz = (hi.xyz.z - lo.xyz.z) * 0.5f;
 
-		// nose, tail and wing nozzles (local, around the centre of the hull)
-		Nozzle nozzles[12];
+		// nozzle clusters around the hull: four at the nose, four at the tail (each pair pointing sideways / up-down), the wingtips
+		// and a pair on the flanks, so a turn is seen to come from several places
+		Nozzle nozzles[Max_nozzles];
 		int n = 0;
 		auto add = [&](float x, float y, float z, float dx, float dy, float dz) {
-			vm_vec_make(&nozzles[n].pos, x, y, z);
-			vm_vec_make(&nozzles[n].dir, dx, dy, dz);
-			n++;
+			if (n < Max_nozzles) {
+				vm_vec_make(&nozzles[n].pos, x, y, z);
+				vm_vec_make(&nozzles[n].dir, dx, dy, dz);
+				n++;
+			}
 		};
-		for (float s : { -1.0f, 1.0f }) {
-			add(0.0f, 0.0f, hz * 0.85f, s, 0.0f, 0.0f);
-			add(0.0f, 0.0f, hz * 0.85f, 0.0f, s, 0.0f);
-			add(0.0f, 0.0f, -hz * 0.85f, s, 0.0f, 0.0f);
-			add(0.0f, 0.0f, -hz * 0.85f, 0.0f, s, 0.0f);
-			add(hx * 0.9f * s, 0.0f, -hz * 0.1f, 0.0f, 1.0f, 0.0f);
-			add(hx * 0.9f * s, 0.0f, -hz * 0.1f, 0.0f, -1.0f, 0.0f);
+		for (float sx : { -1.0f, 1.0f }) {
+			for (float sy : { -1.0f, 1.0f }) {
+				add(sx * hx * 0.3f, sy * hy * 0.35f, hz * 0.8f, sx, 0.0f, 0.0f);
+				add(sx * hx * 0.3f, sy * hy * 0.35f, hz * 0.8f, 0.0f, sy, 0.0f);
+				add(sx * hx * 0.45f, sy * hy * 0.5f, -hz * 0.85f, sx, 0.0f, 0.0f);
+				add(sx * hx * 0.45f, sy * hy * 0.5f, -hz * 0.85f, 0.0f, sy, 0.0f);
+				add(sx * hx * 0.95f, 0.0f, -hz * 0.3f + sy * hz * 0.25f, 0.0f, sy, 0.0f);
+				add(sx * hx * 0.6f, sy * hy * 0.8f, hz * 0.1f, sx, 0.0f, 0.0f);
+			}
 		}
 
 		// turn the wanted rotation into the direction every nozzle position would move
@@ -147,7 +153,7 @@ void rcs_puffs_frame(float frametime)
 		matrix rot;
 		vm_angles_2_matrix(&rot, &ang);
 
-		float score[12];
+		float score[Max_nozzles];
 		float best = 0.0f;
 		for (int i = 0; i < n; i++) {
 			vec3d moved, move;
@@ -161,12 +167,15 @@ void rcs_puffs_frame(float frametime)
 			continue;
 		}
 
-		const float rate = std::min(demand, 1.5f) * 55.0f * strength;	// puffs per second per active nozzle
+		const float rate = std::min(demand, 1.5f) * 90.0f * strength;	// puffs per second per active nozzle
 		for (int i = 0; i < n; i++) {
-			if (score[i] < best * 0.6f || frand() > rate * frametime) {
+			if (score[i] < best * 0.5f || frand() > rate * frametime) {
 				continue;
 			}
 			vec3d lp = nozzles[i].pos + centre, world_pos, world_dir;
+			lp.xyz.x += (frand() - 0.5f) * 0.12f;
+			lp.xyz.y += (frand() - 0.5f) * 0.12f;
+			lp.xyz.z += (frand() - 0.5f) * 0.12f;
 			vm_vec_unrotate(&world_pos, &lp, &objp->orient);
 			world_pos += objp->pos;
 			vm_vec_unrotate(&world_dir, &nozzles[i].dir, &objp->orient);
