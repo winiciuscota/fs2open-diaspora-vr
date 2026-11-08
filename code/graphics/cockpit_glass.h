@@ -14,3 +14,6 @@ void fx_test_frame(object* viewer);
 // A weapon blew up at pos (flak burst, missile hit): its light reaches the canopy scratches for half a second. size ~ metres of blast.
 struct vec3d;
 void cockpit_glass_flash(const vec3d* pos, float size);
+
+// Before the cockpit is drawn: big blasts light the dash and the panels for a moment (point lights from the blast direction).
+void cockpit_flash_lights(object* viewer);
