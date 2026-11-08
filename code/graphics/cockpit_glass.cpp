@@ -34,9 +34,9 @@ const float Az_min = -112.5f, Az_max = 112.5f;      // degrees left/right of the
 const float El_min = -6.0f, El_max = 90.0f;         // degrees below/above the eye level
 const int Cols = 45, Rows = 16;                     // 5 / 6 degree cells
 const float Glint_power = 6.0f;
-const float Ambient_level = 0.085f; // scratch brightness with no light at all (the glass is never perfectly invisible)
-const float Sun_level = 0.25f;     // scratch brightness in sunlight (the F9 setting scales both levels; 1.0 = as tuned here)
-const float Blast_level = 0.15f;   // ... and in the flash of flak bursts, missile hits and ship explosions
+const float Ambient_level = 0.12f; // scratch brightness with no light at all (the glass is never perfectly invisible)
+const float Sun_level = 0.3f;     // scratch brightness in sunlight (the F9 setting scales both levels; 1.0 = as tuned here)
+const float Blast_level = 0.18f;   // ... and in the flash of flak bursts, missile hits and ship explosions
 const float Gain = 1.6f;
 const float Flash_light_level = 1.0f;   // how hard a blast lights the dash and panels
 
@@ -507,6 +507,7 @@ struct Crack {
 };
 std::vector<Crack> Cracks;
 float Last_mission_time = 0.0f, Last_hull = 1.0f, Damage_acc = 0.0f;
+const float Crack_start = 0.6f;	// hull fraction below which the glass starts to crack
 
 void add_crack(const CockpitGlass* glass, const vec3d* local_dir_hint, bool has_hint)
 {
@@ -526,7 +527,24 @@ void add_crack(const CockpitGlass* glass, const vec3d* local_dir_hint, bool has_
 		dir.xyz.x = sinf(az) * cosf(el);
 		dir.xyz.y = sinf(el);
 		dir.xyz.z = cosf(az) * cosf(el);
-		if (glass_distance(*glass, dir) > 0.0f) {
+		// the whole patch (the crack is up to 0.25 m wide) must lie on the glass
+		bool all_on = glass_distance(*glass, dir) > 0.0f;
+		const vec3d up_l = { { { 0.0f, 1.0f, 0.0f } } };
+		vec3d ea, ee;
+		vm_vec_cross(&ea, &up_l, &dir);
+		vm_vec_normalize(&ea);
+		vm_vec_cross(&ee, &dir, &ea);
+		const float reach = 0.30f / std::max(glass_distance(*glass, dir), 0.2f);
+		for (int k = 0; k < 8 && all_on; k++) {
+			const float ang = k * PI2 / 8.0f;
+			vec3d d2;
+			d2.xyz.x = dir.xyz.x + (ea.xyz.x * cosf(ang) + ee.xyz.x * sinf(ang)) * reach;
+			d2.xyz.y = dir.xyz.y + (ea.xyz.y * cosf(ang) + ee.xyz.y * sinf(ang)) * reach;
+			d2.xyz.z = dir.xyz.z + (ea.xyz.z * cosf(ang) + ee.xyz.z * sinf(ang)) * reach;
+			vm_vec_normalize(&d2);
+			all_on = glass_distance(*glass, d2) > 0.0f;
+		}
+		if (all_on) {
 			Crack c;
 			c.dir = dir;
 			c.size = 0.10f + frand() * 0.12f;
@@ -590,20 +608,14 @@ static bool cockpit_glass_render_v2(object* viewer)
 		Last_mission_time = now;
 		const float max_hull = std::max(Ships[viewer->instance].ship_max_hull_strength, 1.0f);
 		const float hull = std::min(std::max(viewer->hull_strength / max_hull, 0.0f), 1.0f);
-		if (hull < Last_hull) {
-			const float lost = Last_hull - hull;
-			Damage_acc += lost;
-			if (lost > 0.2f) {
-				add_crack(glass, nullptr, false);
-			}
-			while (Damage_acc >= 0.12f) {
-				Damage_acc -= 0.12f;
-				add_crack(glass, nullptr, false);
-			}
+		// no cracks above 60% hull; below it one more for every 8% lost (the first one at 60%)
+		const int want = hull < Crack_start ? std::min(1 + static_cast<int>((Crack_start - hull) / 0.08f), 8) : 0;
+		if (static_cast<int>(Cracks.size()) < want) {
+			add_crack(glass, nullptr, false);	// one a frame; if the glass has no free spot it is tried again next frame
 		}
 		Last_hull = hull;
 		for (auto& f : Flashes) {
-			if (!f.cracked && f.size >= 6.0f && now - f.t0 < 0.1f) {
+			if (!f.cracked && hull < Crack_start && f.size >= 6.0f && now - f.t0 < 0.1f) {
 				f.cracked = true;
 				vec3d to, local;
 				vm_vec_sub(&to, &f.pos, &viewer->pos);
@@ -793,6 +805,9 @@ static bool cockpit_glass_render_v2(object* viewer)
 			}
 			for (int j = 0; j < N - 1; j++) {
 				for (int i = 0; i < N - 1; i++) {
+					if (!ok[j][i] || !ok[j][i + 1] || !ok[j + 1][i] || !ok[j + 1][i + 1]) {
+						continue;	// a corner is off the glass: leave this part of the crack out
+					}
 					batch.push_back(pv[j][i]);
 					batch.push_back(pv[j][i + 1]);
 					batch.push_back(pv[j + 1][i + 1]);
