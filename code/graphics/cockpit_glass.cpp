@@ -215,7 +215,7 @@ void cockpit_glass_render(object* viewer)
 			}
 
 			material mat;
-			material_set_unlit(&mat, Scratch_bm, alpha, true, true);	// depth-tested: the dash and the frame hide the scratches behind them
+			material_set_unlit(&mat, Scratch_bm, alpha, true, false);
 			mat.set_blend_mode(ALPHA_BLEND_ADDITIVE);
 			mat.set_color(alpha, alpha * 0.93f, alpha * 0.82f, 1.0f);
 			g3_render_primitives_textured(&mat, v, 4, PRIM_TYPE_TRIFAN, false);
