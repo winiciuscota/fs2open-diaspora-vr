@@ -25,6 +25,11 @@ extern void object_get_eye(vec3d* eye_pos, matrix* eye_orient, const object* obj
 
 namespace {
 
+const float Az_min = -112.5f, Az_max = 112.5f;      // degrees left/right of the nose
+const float El_min = -6.0f, El_max = 90.0f;         // degrees below/above the eye level
+const int Cols = 45, Rows = 16;                     // 5 / 6 degree cells
+const float Glint_power = 6.0f;
+const float Gain = 1.6f;
 
 // The canopy glass: the triangles of the glass in the ships' own models (cockpit_glass_data.h, eye-relative). The dome vertices are
 // the points where rays from the eye leave the glass; cells whose corners do not all hit the glass are not drawn.
